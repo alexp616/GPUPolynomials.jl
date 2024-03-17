@@ -30,65 +30,28 @@ def slowIDFT(p, n) -> list:
     return [x/n for x in slowDFT(p, n, inverted=-1)]
 
 # Fast Discrete Fourier Transform, uses recursion to do same thing as SlowDFT but faster
-# def fastDFT(p, inverted = 1):
-#     n = len(p)
-
-#     if n == 1:
-#         return p
-
-#     # Generating sub-polynomials, for p(x) = p1(x^2) + xp2(x^2)
-#     p1 = p[::2]
-#     p2 = p[1::2]
-
-#     y1 = fastDFT(p1, inverted)
-#     y2 = fastDFT(p2, inverted)
-
-#     result = [0] * n
-
-#     for j in range(n // 2):
-#         theta = cmath.exp(2 * j * inverted * cmath.pi * 1j / n)
-#         result[j] = y1[j] + theta * y2[j]
-#         result[j + n // 2] = y1[j] - theta * y2[j]
-
-#     return result
-
-def fastDFT(p, inverted=1):
+def fastDFT(p, inverted = 1):
     n = len(p)
+
+    if n == 1:
+        return p
+
+    # Generating sub-polynomials, for p(x) = p1(x^2) + xp2(x^2)
+    p1 = p[::2]
+    p2 = p[1::2]
+
+    y1 = fastDFT(p1, inverted)
+    y2 = fastDFT(p2, inverted)
+
     result = [0] * n
 
-    # Bit-reverse permutation
-    bit_rev = [0] * n
-    for i in range(n):
-        bit_rev[i] = bit_reverse(i, n)
+    for j in range(n // 2):
+        theta = cmath.exp(2 * j * inverted * cmath.pi * 1j / n)
+        result[j] = y1[j] + theta * y2[j]
+        result[j + n // 2] = y1[j] - theta * y2[j]
 
-    # Perform iterative FFT
-    for m in range(1, n.bit_length()):
-        step = 2 ** m
-        half_step = step // 2
-        w_step = cmath.exp(2 * inverted * cmath.pi * 1j / step)
-
-        for k in range(0, n, step):
-            w = 1
-            for j in range(half_step):
-                u = result[k + j]
-                v = w * result[k + j + half_step]
-                result[k + j] = u + v
-                result[k + j + half_step] = u - v
-                w *= w_step
-
-    # Rearrange according to bit-reverse permutation
-    rearranged_result = [0] * n
-    for i in range(n):
-        rearranged_result[i] = bit_reverse(i, n)
-
-    return rearranged_result
-
-def bit_reverse(num, bits):
-    result = 0
-    for _ in range(bits):
-        result = (result << 1) | (num & 1)
-        num >>= 1
     return result
+
 
 def fastIDFT(p):
     return [x / len(p) for x in fastDFT(p, inverted=-1)]
@@ -108,19 +71,19 @@ def fastMultiply(p1, p2) -> list:
     
     return [round(ans[i].real) for i in range(finalLength)]
 
-# arr = [i for i in range(1,10000)]
-# polynomial1 = arr
-# polynomial2 = arr
+arr = [i for i in range(1,10000)]
+polynomial1 = arr
+polynomial2 = arr
 
-# st = time.time()
-# print(slowMultiply(polynomial1, polynomial2)[9997])
-# print('Runtime for slow algorithm:',time.time() - st)
-# st = time.time()
-# print(fastMultiply(polynomial1, polynomial2)[9997])
-# print('Runtime for FFT:',time.time() - st)
+st = time.time()
+print(slowMultiply(polynomial1, polynomial2)[9997])
+print('Runtime for slow algorithm:',time.time() - st)
+st = time.time()
+print(fastMultiply(polynomial1, polynomial2)[9997])
+print('Runtime for FFT:',time.time() - st)
 
-print(slowMultiply([1,2,3,4], [1,2,3,4]))
-print(fastMultiply([1,2,3,4], [1,2,3,4]))
+# print(slowMultiply([1,2,3,4], [1,2,3,4]))
+# print(fastMultiply([1,2,3,4], [1,2,3,4]))
 
 
 # print(slowDFT([1,2,0,0], 4))
