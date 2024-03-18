@@ -216,12 +216,57 @@ function iterativeMultiply(p1, p2)
     return [round(real(ans[i])) for i in 1:finalLength]
 end
 
-polynomial1 = [i for i in 1:999]
-polynomial2 = [i for i in 1:999]
+# SQUARING & POWERS
+#
+#
+#
+#
+#
+
+# TODO figure out how to optimize this
+function polynomialSquare(p)
+    return iterativeMultiply(p, p)
+end
+
+
+function toBits(n)
+    bits = [0 for i in 1:ceil(log2(n))]
+    for i in eachindex(bits)
+        bits[i] = n & 1
+        n >>= 1
+    end
+    return bits
+end
+
+function polynomialPow(p, n)
+    # Only takes positive integer n>=1
+    bitarr = toBits(n)
+    result = [1]
+    temp = p
+    for i in 1:length(bitarr)-1
+        if i == 1
+            result = iterativeMultiply(result, temp)
+        temp = polynomialSquare(temp)
+        end
+    end
+    if bitarr[end] == 1
+        result = iterativeMultiply(result, temp)
+    end
+    return result
+end
+
+print(polynomialPow([1,1], 3))
+
+
+# polynomial1 = [i for i in 1:999]
+# polynomial2 = [i for i in 1:999]
+
+polynomial1 = [-1,2,-3,4]
+polynomial2 = [1,-2,3,-4]
 
 println("-----------------start------------------")
 t = now()
-slowMultiply(polynomial1, polynomial2)
+println(slowMultiply(polynomial1, polynomial2))
 println("Standard: ", now() - t)
 # 999-length vector: 0.030s
 # 99999-length vector: 3.527s
@@ -234,7 +279,7 @@ println("Recursive: ", now() - t)
 # 99999-length vector: 0.600s
 
 t = now()
-iterativeMultiply(polynomial1, polynomial2)
+println(iterativeMultiply(polynomial1, polynomial2))
 println("Iterative: ", now() - t)
 # 999-length vector: 0.185s
 # 99999-length vector: 0.279s
