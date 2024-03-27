@@ -10,10 +10,10 @@ function slowMultiply(polynomial1, polynomial2)
     # 
     # Returns array containing coefficients of product of polynomial1 and polynomial2
 
-    temp = [0 for i in 1:(length(polynomial1) + length(polynomial2)-1)]
+    temp = fill(0, length(polynomial1) + length(polynomial2)-1)
     for i in eachindex(polynomial1) 
         for j in eachindex(polynomial2)
-            temp[i + j - 1] += polynomial1[i] * polynomial2[j]
+            @inbounds temp[i + j - 1] += polynomial1[i] * polynomial2[j]
         end
     end
     return temp
@@ -65,12 +65,12 @@ function recursiveDFThelper(a, theta, depth = 0, inverted = 1)
     y1 = recursiveDFThelper(a1, theta, depth + 1, inverted)
 
     # Initializing final array
-    result = [complex(0.0, 0) for i in 1:n]
+    result = fill(complex(0.0, 0), n)
 
     for i in 1:div(n, 2)
         # p(x) = p0(x^2) + xp1(x^2)
-        result[i] = y0[i] + theta[(2^depth) * (i - 1) + 1] * y1[i]
-        result[i + div(n, 2)] = y0[i] - theta[(2^depth) * (i - 1) + 1] * y1[i]
+        @inbounds result[i] = y0[i] + theta[(2^depth) * (i - 1) + 1] * y1[i]
+        @inbounds result[i + div(n, 2)] = y0[i] - theta[(2^depth) * (i - 1) + 1] * y1[i]
     end
 
     return result
@@ -105,7 +105,6 @@ function recursiveMultiply(p1, p2)
     #
     # Returns array containing coefficients of product of polynomial1 and polynomial2
 
-    # TODO check if Int. needed
     n = Int.(2^ceil(log2(length(p1) + length(p2) - 1)))
     finalLength = length(p1) + length(p2) - 1
 
@@ -119,7 +118,7 @@ function recursiveMultiply(p1, p2)
     y2 = recursiveDFT(copyp2)
 
     ans = recursiveIDFT([y1[i] * y2[i] for i in 1:n])
-    return [round(real(ans[i])) for i in 1:finalLength]
+    return [round(Int, real(ans[i])) for i in 1:finalLength]
 end
 
 # ITERATIVE DFT
@@ -144,11 +143,11 @@ end
 function iterativeDFT(p, inverted = 1)
     n = length(p)
     log2n = UInt32(log2(n));
-    result = [complex(0.0, 0) for i in 1:n]
+    result = fill(complex(0.0, 0), n)
 
     for i in 0:n-1
         rev = bitReverse(i, log2n)
-        result[i+1] = p[rev+1]
+        @inbounds result[i+1] = p[rev+1]
     end
 
     for i in 1:log2n
@@ -158,11 +157,11 @@ function iterativeDFT(p, inverted = 1)
         theta_m = cis(inverted * pi/m2)
         for j in 0:m2-1
             for k in j:m:n-1
-                t = theta * result[k + m2 + 1]
-                u = result[k + 1]
+                t = theta * @inbounds result[k + m2 + 1]
+                u = @inbounds result[k + 1]
 
-                result[k + 1] = u + t
-                result[k + m2 + 1] = u - t
+                @inbounds result[k + 1] = u + t
+                @inbounds result[k + m2 + 1] = u - t
             end
             theta *= theta_m
         end
@@ -199,7 +198,6 @@ function iterativeMultiply(p1, p2)
     #
     # Returns array containing coefficients of product of polynomial1 and polynomial2
 
-    # TODO check if Int. needed here
     n = Int.(2^ceil(log2(length(p1) + length(p2) - 1)))
     finalLength = length(p1) + length(p2) - 1
 
@@ -213,7 +211,7 @@ function iterativeMultiply(p1, p2)
     y2 = iterativeDFT(copyp2)
 
     ans = iterativeIDFT([y1[i] * y2[i] for i in 1:n])
-    return [round(real(ans[i])) for i in 1:finalLength]
+    return [round(Int, real(ans[i])) for i in 1:finalLength]
 end
 
 # SQUARING & POWERS
@@ -227,7 +225,6 @@ end
 function polynomialSquare(p)
     return iterativeMultiply(p, p)
 end
-
 
 function toBits(n)
     bits = [0 for i in 1:ceil(log2(n))]
@@ -255,18 +252,18 @@ function polynomialPow(p, n)
     return result
 end
 
-print(polynomialPow([1,1], 3))
+# print(polynomialPow([1,1], 3))
 
 
-# polynomial1 = [i for i in 1:999]
-# polynomial2 = [i for i in 1:999]
+polynomial1 = [i for i in 1:999]
+polynomial2 = [i for i in 1:999]
 
-polynomial1 = [-1,2,-3,4]
-polynomial2 = [1,-2,3,-4]
+# polynomial1 = [-1,2,-3,4]
+# polynomial2 = [1,-2,3,-4]
 
 println("-----------------start------------------")
 t = now()
-println(slowMultiply(polynomial1, polynomial2))
+slowMultiply(polynomial1, polynomial2)
 println("Standard: ", now() - t)
 # 999-length vector: 0.030s
 # 99999-length vector: 3.527s
@@ -279,7 +276,7 @@ println("Recursive: ", now() - t)
 # 99999-length vector: 0.600s
 
 t = now()
-println(iterativeMultiply(polynomial1, polynomial2))
+iterativeMultiply(polynomial1, polynomial2)
 println("Iterative: ", now() - t)
 # 999-length vector: 0.185s
 # 99999-length vector: 0.279s
