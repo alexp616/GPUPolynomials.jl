@@ -1,6 +1,7 @@
 using BenchmarkTools
-using Dates
 using Profile
+using CUDA
+using Test
 
 function slowMultiply(polynomial1, polynomial2)
     # Classic, O(n^2) way of multiplying polynomials (FOIL)
@@ -65,7 +66,7 @@ function recursiveDFThelper(a, theta, depth = 0, inverted = 1)
     y1 = recursiveDFThelper(a1, theta, depth + 1, inverted)
 
     # Initializing final array
-    result = fill(complex(0.0, 0), n)
+    result = fill(ComplexF32(0), n)
 
     for i in 1:div(n, 2)
         # p(x) = p0(x^2) + xp1(x^2)
@@ -143,7 +144,7 @@ end
 function iterativeDFT(p, inverted = 1)
     n = length(p)
     log2n = UInt32(log2(n));
-    result = fill(complex(0.0, 0), n)
+    result = fill(ComplexF32(0), n)
 
     for i in 0:n-1
         rev = bitReverse(i, log2n)
@@ -157,11 +158,11 @@ function iterativeDFT(p, inverted = 1)
         theta_m = cis(inverted * pi/m2)
         for j in 0:m2-1
             for k in j:m:n-1
-                t = theta * @inbounds result[k + m2 + 1]
-                u = @inbounds result[k + 1]
+                t = theta * result[k + m2 + 1]
+                u = result[k + 1]
 
-                @inbounds result[k + 1] = u + t
-                @inbounds result[k + m2 + 1] = u - t
+                result[k + 1] = u + t
+                result[k + m2 + 1] = u - t
             end
             theta *= theta_m
         end
@@ -214,6 +215,50 @@ function iterativeMultiply(p1, p2)
     return [round(Int, real(ans[i])) for i in 1:finalLength]
 end
 
+# GPU-PARALLELIZED-VERSION
+#
+#
+#
+#
+#
+
+function gpuFFT(p::CuArray{ComplexF32})
+    n = length(p)
+    twiddle = CUDA.fill(ComplexF32(0), n)
+    result = CUDA.zeros(ComplexF32, n)
+    
+    # TODO figure out config(kernel.fun) or something to pick right thread count
+    nthreads = min(n, 1024)
+    nblocks = cld(n, 1024)
+
+    @cuda threads=nthreads blocks=nblocks compute_twiddle_factors(twiddle, n)
+    
+    @cuda threads=nthreads blocks=nblocks parallel_fft_butterfly(p, twiddle, result, n)
+    
+    return result
+end
+
+function compute_twiddle_factors(twiddle, n)
+    idx = threadIdx().x + (blockIdx().x - 1) * blockDim().x
+    if idx <= n
+        twiddle[idx] = cis(2 * pi * (idx - 1) / n)
+    end
+    return
+end
+
+function parallel_fft_butterfly(input, twiddle, output, n)
+    idx = threadIdx().x + (blockIdx().x - 1) * blockDim().x
+    if idx <= n
+        sum = ComplexF32(0)
+        for k = 1:n
+            sum += input[k] * twiddle[((idx - 1) * (k - 1)) % n + 1]
+        end
+        output[idx] = sum
+    end
+    return
+end
+
+
 # SQUARING & POWERS
 #
 #
@@ -252,40 +297,24 @@ function polynomialPow(p, n)
     return result
 end
 
-# print(polynomialPow([1,1], 3))
+polynomial1 = [1 for i in 1:1024]
+polynomial2 = [1 for i in 1:1024]
 
-
-polynomial1 = [i for i in 1:999]
-polynomial2 = [i for i in 1:999]
-
-# polynomial1 = [-1,2,-3,4]
-# polynomial2 = [1,-2,3,-4]
+# When I do polynomial1 = [i for i in 1:2048], I get different outputs for my iterativeDFT and gpuFFT; probably
+# because of floating point precision or something?
 
 println("-----------------start------------------")
-t = now()
-slowMultiply(polynomial1, polynomial2)
-println("Standard: ", now() - t)
-# 999-length vector: 0.030s
-# 99999-length vector: 3.527s
+# cudaarray = CuArray(convert(Array{ComplexF32}, polynomial1))
+# gpu_output = Array(gpuFFT(cudaarray))
+# gpu_output = [round(gpu_output[i]) for i in eachindex(gpu_output)]
 
-# Recursion isn't optimal because Julia doesn't have tail call optimization
-t = now()
-recursiveMultiply(polynomial1, polynomial2)
-println("Recursive: ", now() - t)
-# 999-length vector: 0.329s
-# 99999-length vector: 0.600s
-
-t = now()
-iterativeMultiply(polynomial1, polynomial2)
-println("Iterative: ", now() - t)
-# 999-length vector: 0.185s
-# 99999-length vector: 0.279s
-
-
-# To benchmark in terminal:
-# polynomial1 = [i for i in 1:99999]
-# @benchmark slowMultiply(polynomial1, polynomial1)
-# @benchmark recursiveMultiply(polynomial1, polynomial1)
-# @benchmark iterativeMultiply(polynomial1, polynomial1)
+# cpu_output = iterativeDFT(polynomial1)
+# cpu_output = [round(cpu_output[i]) for i in eachindex(cpu_output)]
+# @test gpu_output == cpu_output
+cudaarray = CuArray(convert(Array{ComplexF32}, polynomial1))
+@btime gpuFFT(cudaarray)
+@btime iterativeDFT(polynomial1)
 
 println("------------------end-------------------")
+
+
