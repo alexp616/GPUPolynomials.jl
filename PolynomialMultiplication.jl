@@ -222,26 +222,29 @@ end
 #
 #
 
-function gpuFFT(p::CuArray{ComplexF32})
+function gpuFFT(p::CuArray{ComplexF32}, inverted = 1)
     n = length(p)
     twiddle = CUDA.fill(ComplexF32(0), n)
-    result = CUDA.zeros(ComplexF32, n)
+    result = CUDA.fill(ComplexF32(0), n)
     
-    # TODO figure out config(kernel.fun) or something to pick right thread count
-    nthreads = min(n, 1024)
-    nblocks = cld(n, 1024)
+    nthreads = min(CUDA.attribute(
+        device(),
+        CUDA.DEVICE_ATTRIBUTE_MAX_THREADS_PER_BLOCK
+    ), n)
 
-    @cuda threads=nthreads blocks=nblocks compute_twiddle_factors(twiddle, n)
+    nblocks = cld(n, nthreads)
+
+    @cuda threads=nthreads blocks=nblocks compute_twiddle_factors(twiddle, n, inverted)
     
     @cuda threads=nthreads blocks=nblocks parallel_fft_butterfly(p, twiddle, result, n)
-    
+
     return result
 end
 
-function compute_twiddle_factors(twiddle, n)
+function compute_twiddle_factors(twiddle, n, inverted)
     idx = threadIdx().x + (blockIdx().x - 1) * blockDim().x
     if idx <= n
-        twiddle[idx] = cis(2 * pi * (idx - 1) / n)
+        twiddle[idx] = cis(inverted * 2 * pi * (idx - 1) / n)
     end
     return
 end
@@ -258,6 +261,24 @@ function parallel_fft_butterfly(input, twiddle, output, n)
     return
 end
 
+function gpuIFFT(p::CuArray{ComplexF32})
+    return gpuFFT(p, -1) .*  (1/length(p))
+end
+
+function gpuMultiply(p1, p2)
+    n = Int.(2^ceil(log2(length(p1) + length(p2) - 1)))
+    finalLength = length(p1) + length(p2) - 1
+
+    # TODO surely there must be a better way to do this
+    copyp1 = append!(convert(Array{ComplexF32}, copy(p1)), zeros(ComplexF32, n - length(p1)))
+    copyp2 = append!(convert(Array{ComplexF32}, copy(p2)), zeros(ComplexF32, n - length(p2)))
+
+    y1 = gpuFFT(CuArray(copyp1))
+    y2 = gpuFFT(CuArray(copyp2))
+
+    ans = Array(gpuIFFT(y1 .* y2))
+    return [round(Int, real(ans[i])) for i in 1:finalLength]
+end
 
 # SQUARING & POWERS
 #
@@ -297,24 +318,29 @@ function polynomialPow(p, n)
     return result
 end
 
-polynomial1 = [1 for i in 1:1024]
-polynomial2 = [1 for i in 1:1024]
+polynomial1 = [1 for i in 1:2^10]
+polynomial2 = [1 for i in 1:2^10]
 
-# When I do polynomial1 = [i for i in 1:2048], I get different outputs for my iterativeDFT and gpuFFT; probably
-# because of floating point precision or something?
-
+# potential of precision errors when degree gets too high
 println("-----------------start------------------")
-# cudaarray = CuArray(convert(Array{ComplexF32}, polynomial1))
-# gpu_output = Array(gpuFFT(cudaarray))
-# gpu_output = [round(gpu_output[i]) for i in eachindex(gpu_output)]
+# the gpu algorithms are faster when the Cuda Array is already initialized. However,
+# there is a HUGE overhead for creating the cuda array which makes the non-parallelized
+# algorithms faster until a very very high degree
 
-# cpu_output = iterativeDFT(polynomial1)
-# cpu_output = [round(cpu_output[i]) for i in eachindex(cpu_output)]
-# @test gpu_output == cpu_output
+
 cudaarray = CuArray(convert(Array{ComplexF32}, polynomial1))
+# gpuFFT is faster
 @btime gpuFFT(cudaarray)
 @btime iterativeDFT(polynomial1)
 
+# Forward FFT works
+@test Array(gpuFFT(cudaarray)) == iterativeDFT(polynomial1)
+
+# gpuIFFT is faster
+@btime gpuIFFT(cudaarray)
+@btime iterativeIDFT(polynomial1)
+
+@test Array(gpuIFFT(cudaarray)) == iterativeIDFT(polynomial1)
 println("------------------end-------------------")
 
 
