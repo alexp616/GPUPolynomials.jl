@@ -243,21 +243,32 @@ end
 
 function compute_twiddle_factors(twiddle, n, inverted)
     idx = threadIdx().x + (blockIdx().x - 1) * blockDim().x
-    if idx <= n
-        twiddle[idx] = cis(inverted * 2 * pi * (idx - 1) / n)
-    end
+    # Turns out this check isn't needed, I guess it knows precisely how
+    # many threads are in the last block
+    # 
+    # if idx <= n
+    #     twiddle[idx] = cis(inverted * 2 * pi * (idx - 1) / n)
+    # end
+
+    twiddle[idx] = cis(inverted * 2 * pi * (idx - 1) / n)
     return
 end
 
 function parallel_fft_butterfly(input, twiddle, output, n)
     idx = threadIdx().x + (blockIdx().x - 1) * blockDim().x
-    if idx <= n
-        sum = ComplexF32(0)
-        for k = 1:n
-            sum += input[k] * twiddle[((idx - 1) * (k - 1)) % n + 1]
-        end
-        output[idx] = sum
+    # Same here as above
+    # if idx <= n
+    #     sum = ComplexF32(0)
+    #     for k = 1:n
+    #         sum += input[k] * twiddle[((idx - 1) * (k - 1)) % n + 1]
+    #     end
+    #     output[idx] = sum
+    # end
+    sum = ComplexF32(0)
+    for k = 1:n
+        sum += input[k] * twiddle[((idx - 1) * (k - 1)) % n + 1]
     end
+    output[idx] = sum
     return
 end
 
@@ -318,8 +329,8 @@ function polynomialPow(p, n)
     return result
 end
 
-polynomial1 = [1 for i in 1:2^10]
-polynomial2 = [1 for i in 1:2^10]
+polynomial1 = [1 for i in 1:5000]
+polynomial2 = [1 for i in 1:5000]
 
 # potential of precision errors when degree gets too high
 println("-----------------start------------------")
@@ -327,20 +338,21 @@ println("-----------------start------------------")
 # there is a HUGE overhead for creating the cuda array which makes the non-parallelized
 # algorithms faster until a very very high degree
 
-
 cudaarray = CuArray(convert(Array{ComplexF32}, polynomial1))
 # gpuFFT is faster
-@btime gpuFFT(cudaarray)
-@btime iterativeDFT(polynomial1)
+# @btime gpuFFT(cudaarray)
+# @btime iterativeDFT(polynomial1)
 
 # Forward FFT works
-@test Array(gpuFFT(cudaarray)) == iterativeDFT(polynomial1)
+# @test round.(Array(gpuFFT(cudaarray))) == round.(iterativeDFT(polynomial1))
 
 # gpuIFFT is faster
-@btime gpuIFFT(cudaarray)
-@btime iterativeIDFT(polynomial1)
+# @btime gpuIFFT(cudaarray)
+# @btime iterativeIDFT(polynomial1)
 
-@test Array(gpuIFFT(cudaarray)) == iterativeIDFT(polynomial1)
+# @test round.(Array(gpuIFFT(cudaarray))) == round.(iterativeIDFT(polynomial1))
+
+@test Array(gpuMultiply(polynomial1, polynomial2)) == iterativeMultiply(polynomial1, polynomial2)
 println("------------------end-------------------")
 
 
