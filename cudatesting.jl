@@ -34,7 +34,6 @@ function slowMultiply2Kernel!(temp, p1, p2)
     for i = idx:stride:length(temp)
         for j in eachindex(p1)
             if i >= j && (i - j + 1) <= length(p2)
-                @cuprintln("ThreadID: $idx")
                 @inbounds temp[i] += p1[j] * p2[i - j + 1]
             end
         end
@@ -55,7 +54,6 @@ function slowMultiply2(p1, p2)
 
     nblocks = cld(length(p1)*length(p2), nthreads)
 
-    println("Threads: $nthreads, Blocks: $nblocks")
     CUDA.@sync @cuda(
         threads = nthreads,
         blocks = nblocks,
@@ -66,13 +64,16 @@ function slowMultiply2(p1, p2)
 end
 
 
-polynomial1 = [1 for i in 1:5]
-polynomial2 = [1 for i in 1:5]
+
+polynomial1 = [1 for i in 1:10000]
+polynomial2 = [1 for i in 1:10000]
+
+
 
 println("-----------------start------------------")
 # @btime slowMultiply1(polynomial1, polynomial2)
 # btime slowMultiply2(polynomial1, polynomial2)
 # # slowMultiply2 catches up and becomes faster at squaring a 1700-degree polynomial (on my NVIDIA GeForce RTX 3050 Laptop GPU)
-slowMultiply2(polynomial1, polynomial2)
+@btime slowMultiply2(polynomial1, polynomial2)
 # @test (slowMultiply1(polynomial1, polynomial2) == Array(slowMultiply2(polynomial1, polynomial2)))
 println("------------------end-------------------")

@@ -329,16 +329,33 @@ function polynomialPow(p, n)
     return result
 end
 
-polynomial1 = [1 for i in 1:5000]
-polynomial2 = [1 for i in 1:5000]
+polynomial1 = [1 for i in 1:4096]
+polynomial2 = [1 for i in 1:4096]
 
 # potential of precision errors when degree gets too high
+
+# Hypothetically with n threads, each thread should only need to compute log2n operations, but
+# because my current iterativeDFT method relies on past iterations to compute the next iteration,
+# I can't parallalize that exact algorithm.
+
+# The GPU-Parallelized FFT algorithms are much faster than the non-parallelized algorithms, but
+# gpuMultiply is much slower than iterativeMultiply
+# I conjecture that this is because the GPUMultiply method requires too much memory movement, and I should
+# throw everything into one method.
+
 println("-----------------start------------------")
 # the gpu algorithms are faster when the Cuda Array is already initialized. However,
 # there is a HUGE overhead for creating the cuda array which makes the non-parallelized
 # algorithms faster until a very very high degree
 
-cudaarray = CuArray(convert(Array{ComplexF32}, polynomial1))
+cudapolynomial1 = CuArray(convert(Array{ComplexF32}, polynomial1))
+cudapolynomial2 = CuArray(convert(Array{ComplexF32}, polynomial2))
+CUDA.@profile gpuMultiply(cudapolynomial1, cudapolynomial2)
+# @btime iterativeMultiply(polynomial1, polynomial2)
+
+# CUDA.@profile gpuIFFT(cudapolynomial1)
+# @btime iterativeDFT(polynomial1)
+
 # gpuFFT is faster
 # @btime gpuFFT(cudaarray)
 # @btime iterativeDFT(polynomial1)
@@ -352,7 +369,7 @@ cudaarray = CuArray(convert(Array{ComplexF32}, polynomial1))
 
 # @test round.(Array(gpuIFFT(cudaarray))) == round.(iterativeIDFT(polynomial1))
 
-@test Array(gpuMultiply(polynomial1, polynomial2)) == iterativeMultiply(polynomial1, polynomial2)
+# @test Array(gpuMultiply(polynomial1, polynomial2)) == iterativeMultiply(polynomial1, polynomial2)
 println("------------------end-------------------")
 
 
