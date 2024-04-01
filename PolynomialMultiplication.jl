@@ -148,16 +148,19 @@ function iterativeDFT(p, inverted = 1)
 
     for i in 0:n-1
         rev = bitReverse(i, log2n)
-        @inbounds result[i+1] = p[rev+1]
+        result[i+1] = p[rev+1]
     end
 
     for i in 1:log2n
-        m = 1 << i
+        m = 1 << i # 2 ^ i
         m2 = m >> 1
         theta = complex(1,0)
+        readabletheta = 0
         theta_m = cis(inverted * pi/m2)
+        readabletheta_m = 2 / m2
         for j in 0:m2-1
             for k in j:m:n-1
+                # println("k: $k, theta: $readabletheta pi")
                 t = theta * result[k + m2 + 1]
                 u = result[k + 1]
 
@@ -165,7 +168,9 @@ function iterativeDFT(p, inverted = 1)
                 result[k + m2 + 1] = u - t
             end
             theta *= theta_m
+            readabletheta += readabletheta_m
         end
+        # println("---------------")
     end
 
     return result
@@ -221,61 +226,51 @@ end
 #
 #
 #
-function gpuDFT(p::CuArray{ComplexF32}, inverted = 1)
+function gpuDFT(p, inverted = 1)
     n = length(p)
-    theta_n = CUDA.fill(ComplexF32(0), n)
-    result = CUDA.fill(ComplexF32(0), n)
+    log2n = UInt32(log2(n))
+    result = fill(ComplexF32(0), n)
     
     nthreads = min(CUDA.attribute(
         device(),
         CUDA.DEVICE_ATTRIBUTE_MAX_THREADS_PER_BLOCK
-    ), n)
+    ), Int(n/2))
 
-    nblocks = cld(n, nthreads)
+    nblocks = cld(Int(n/2), nthreads)
 
-    @cuda threads=nthreads blocks=nblocks compute_theta(theta_n, n, inverted)
-
-    @cuda threads=nthreads blocks=nblocks parallel_dft(p, theta_n, result, n)
-
-    return result
-end
-
-function compute_theta(theta_n, n, inverted)
-    
-    idx = threadIdx().x + (blockIdx().x - 1) * blockDim().x
-
-    theta_n[idx] = cis(inverted * 2 * pi * (idx - 1) / n)
-    return
-end
-
-function parallel_dft(input, theta_n, output, n)
-    idx = threadIdx().x + (blockIdx().x - 1) * blockDim().x
-    sum = ComplexF32(0)
-
-    for k = 1:n
-        sum += input[k] * theta_n[((idx - 1) * (k - 1)) % n + 1]
+    for i in 0:n-1
+        rev = bitReverse(i, log2n)
+        result[i + 1] = p[rev + 1]
     end
-    output[idx] = sum
-    return
+
+    result = CuArray(result)
+
+    for i in 1:log2n
+        m2 = 1 << (i - 1)
+        theta_m = cis(inverted * 2 * pi / m2)
+        
+        # magic because its magic how i figured it out
+        magic = 1 << (log2n - i)
+        # magic = (log2n / 2) / m2
+        CUDA.@sync @cuda threads=nthreads blocks=nblocks gpuDFTKernel(result, m2, theta_m, magic)
+    end
+
+    return Array(result)
 end
 
-function gpuIDFT(p::CuArray{ComplexF32})
-    return gpuDFT(p, -1) .*  (1/length(p))
-end
+function gpuDFTKernel(result, m2, theta_m, magic)
+    idx = threadIdx().x + (blockIdx().x - 1) * blockDim().x - 1
+    k = Int(2 * m2 * (idx % magic) + floor(idx/magic))
 
-function gpuMultiply(p1, p2)
-    n = Int.(2^ceil(log2(length(p1) + length(p2) - 1)))
-    finalLength = length(p1) + length(p2) - 1
+    # Don't know if raising complex numbers to powers is efficient.
+    theta = (theta_m) ^ (floor(idx/magic))
 
-    # TODO surely there must be a better way to do this
-    copyp1 = append!(convert(Array{ComplexF32}, copy(p1)), zeros(ComplexF32, n - length(p1)))
-    copyp2 = append!(convert(Array{ComplexF32}, copy(p2)), zeros(ComplexF32, n - length(p2)))
+    t = theta * result[k + m2 + 1]
+    u = result[k + 1]
 
-    y1 = gpuDFT(CuArray(copyp1))
-    y2 = gpuDFT(CuArray(copyp2))
-
-    ans = Array(gpuIDFT(y1 .* y2))
-    return [round(Int, real(ans[i])) for i in 1:finalLength]
+    result[k + 1] = u + t
+    result[k + m2 + 1] = u - t
+    return 
 end
 
 # SQUARING & POWERS
@@ -316,14 +311,10 @@ function polynomialPow(p, n)
     return result
 end
 
-polynomial1 = [1 for i in 1:4096]
+polynomial1 = [1 for i in 1:2^16]
 polynomial2 = [1 for i in 1:4096]
 
 # potential of precision errors when degree gets too high
-
-# Hypothetically with n threads, each thread should only need to compute log2n operations, but
-# because my current iterativeDFT method relies on past iterations to compute the next iteration,
-# I can't parallalize that exact algorithm.
 
 # The GPU-Parallelized FFT algorithms are much faster than the non-parallelized algorithms, but
 # gpuMultiply is much slower than iterativeMultiply
@@ -331,32 +322,7 @@ polynomial2 = [1 for i in 1:4096]
 # throw everything into one method.
 
 println("-----------------start------------------")
-# the gpu algorithms are faster when the Cuda Array is already initialized. However,
-# there is a HUGE overhead for creating the cuda array which makes the non-parallelized
-# algorithms faster until a very very high degree
-
-cudapolynomial1 = CuArray(convert(Array{ComplexF32}, polynomial1))
-cudapolynomial2 = CuArray(convert(Array{ComplexF32}, polynomial2))
-CUDA.@profile gpuMultiply(cudapolynomial1, cudapolynomial2)
-# @btime iterativeMultiply(polynomial1, polynomial2)
-
-# CUDA.@profile gpuIFFT(cudapolynomial1)
-# @btime iterativeDFT(polynomial1)
-
-# gpuFFT is faster
-# @btime gpuFFT(cudaarray)
-# @btime iterativeDFT(polynomial1)
-
-# Forward FFT works
-# @test round.(Array(gpuFFT(cudaarray))) == round.(iterativeDFT(polynomial1))
-
-# gpuIFFT is faster
-# @btime gpuIFFT(cudaarray)
-# @btime iterativeIDFT(polynomial1)
-
-# @test round.(Array(gpuIFFT(cudaarray))) == round.(iterativeIDFT(polynomial1))
-
-# @test Array(gpuMultiply(polynomial1, polynomial2)) == iterativeMultiply(polynomial1, polynomial2)
+@btime iterativeDFT(polynomial1)
+@btime gpuDFT(polynomial1)
+@test round.(iterativeDFT(polynomial1)) == round.(gpuDFT(polynomial1))
 println("------------------end-------------------")
-
-
