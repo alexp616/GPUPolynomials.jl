@@ -221,10 +221,9 @@ end
 #
 #
 #
-
-function gpuFFT(p::CuArray{ComplexF32}, inverted = 1)
+function gpuDFT(p::CuArray{ComplexF32}, inverted = 1)
     n = length(p)
-    twiddle = CUDA.fill(ComplexF32(0), n)
+    theta_n = CUDA.fill(ComplexF32(0), n)
     result = CUDA.fill(ComplexF32(0), n)
     
     nthreads = min(CUDA.attribute(
@@ -234,46 +233,34 @@ function gpuFFT(p::CuArray{ComplexF32}, inverted = 1)
 
     nblocks = cld(n, nthreads)
 
-    @cuda threads=nthreads blocks=nblocks compute_twiddle_factors(twiddle, n, inverted)
-    
-    @cuda threads=nthreads blocks=nblocks parallel_fft_butterfly(p, twiddle, result, n)
+    @cuda threads=nthreads blocks=nblocks compute_theta(theta_n, n, inverted)
+
+    @cuda threads=nthreads blocks=nblocks parallel_dft(p, theta_n, result, n)
 
     return result
 end
 
-function compute_twiddle_factors(twiddle, n, inverted)
+function compute_theta(theta_n, n, inverted)
+    
     idx = threadIdx().x + (blockIdx().x - 1) * blockDim().x
-    # Turns out this check isn't needed, I guess it knows precisely how
-    # many threads are in the last block
-    # 
-    # if idx <= n
-    #     twiddle[idx] = cis(inverted * 2 * pi * (idx - 1) / n)
-    # end
 
-    twiddle[idx] = cis(inverted * 2 * pi * (idx - 1) / n)
+    theta_n[idx] = cis(inverted * 2 * pi * (idx - 1) / n)
     return
 end
 
-function parallel_fft_butterfly(input, twiddle, output, n)
+function parallel_dft(input, theta_n, output, n)
     idx = threadIdx().x + (blockIdx().x - 1) * blockDim().x
-    # Same here as above
-    # if idx <= n
-    #     sum = ComplexF32(0)
-    #     for k = 1:n
-    #         sum += input[k] * twiddle[((idx - 1) * (k - 1)) % n + 1]
-    #     end
-    #     output[idx] = sum
-    # end
     sum = ComplexF32(0)
+
     for k = 1:n
-        sum += input[k] * twiddle[((idx - 1) * (k - 1)) % n + 1]
+        sum += input[k] * theta_n[((idx - 1) * (k - 1)) % n + 1]
     end
     output[idx] = sum
     return
 end
 
-function gpuIFFT(p::CuArray{ComplexF32})
-    return gpuFFT(p, -1) .*  (1/length(p))
+function gpuIDFT(p::CuArray{ComplexF32})
+    return gpuDFT(p, -1) .*  (1/length(p))
 end
 
 function gpuMultiply(p1, p2)
@@ -284,10 +271,10 @@ function gpuMultiply(p1, p2)
     copyp1 = append!(convert(Array{ComplexF32}, copy(p1)), zeros(ComplexF32, n - length(p1)))
     copyp2 = append!(convert(Array{ComplexF32}, copy(p2)), zeros(ComplexF32, n - length(p2)))
 
-    y1 = gpuFFT(CuArray(copyp1))
-    y2 = gpuFFT(CuArray(copyp2))
+    y1 = gpuDFT(CuArray(copyp1))
+    y2 = gpuDFT(CuArray(copyp2))
 
-    ans = Array(gpuIFFT(y1 .* y2))
+    ans = Array(gpuIDFT(y1 .* y2))
     return [round(Int, real(ans[i])) for i in 1:finalLength]
 end
 
