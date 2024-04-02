@@ -312,7 +312,7 @@ function polynomialPow(p, n)
 end
 
 polynomial1 = [1 for i in 1:2^16]
-polynomial2 = [1 for i in 1:4096]
+polynomial2 = [i for i in 1:4]
 
 # potential of precision errors when degree gets too high
 
@@ -322,7 +322,9 @@ polynomial2 = [1 for i in 1:4096]
 # throw everything into one method.
 
 println("-----------------start------------------")
-@btime iterativeDFT(polynomial1)
-@btime gpuDFT(polynomial1)
+# @btime iterativeDFT(polynomial1)
+# @btime gpuDFT(polynomial1)
+println(round.(iterativeDFT(polynomial2)))
+println(round.(gpuDFT(polynomial2)))
 @test round.(iterativeDFT(polynomial1)) == round.(gpuDFT(polynomial1))
 println("------------------end-------------------")
