@@ -126,19 +126,8 @@ end
 
 # NTT and INTT work perfectly well. At least, assuming n is a power of 2, and p is a relatively small prime.
 
-# Unsure, but I don't think polynomial multiplication mod n can be implemented using
-# this version of NTT. The part I was confused about with the algorithm for multiplying
-# polynomials using DFT was how D^-1(D(x)∘D(y))=conv(x,y). D(x) and D(y) are both length
-# n, which is usually a higher degree than the actual product of x and y. 2 things I 
-# don't get:
-# How does D^-1(D(x)∘D(y))=conv(x,y) ? ∘ is component-wise multiplication, how is it doing
-# the same thing as multiplying every term by every other term?
-# 
-# How does D^-1 know what the degree of the ending polynomial is? Polynomial interpolation
-# is usually given n points, an n-1 degree polynomial can be found that fits it. But D^-1
-# puts 0's for every degree after the actual degree of conv(x,y)
-
-# Looks like I have some more studying to do
+# Need to think about why multiplication doesn't work. Maybe something is just wrong in my code and I'm going to 
+# insane trying to find an answer to a problem that doesn't exist
 
 
 p1 = [1,2,3,4,0,0,0,0]
