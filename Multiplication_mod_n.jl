@@ -124,7 +124,7 @@ function slowMultiply(p1, p2)
     return temp
 end
 
-# NTT and INTT work perfectly well.
+# NTT and INTT work perfectly well. At least, assuming n is a power of 2, and p is a relatively small prime.
 
 # Unsure, but I don't think polynomial multiplication mod n can be implemented using
 # this version of NTT. The part I was confused about with the algorithm for multiplying
