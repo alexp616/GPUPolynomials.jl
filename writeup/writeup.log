@@ -1,10 +1,10 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.25 (MiKTeX 24.1) (preloaded format=pdflatex 2024.4.1)  3 APR 2024 01:33
+This is pdfTeX, Version 3.141592653-2.6-1.40.25 (MiKTeX 24.1) (preloaded format=pdflatex 2024.4.1)  4 APR 2024 00:16
 entering extended mode
  restricted \write18 enabled.
  file:line:error style messages enabled.
  %&-line parsing enabled.
-**c:/Users/Alex/Downloads/polynomial-multiplication-fft/writeup.tex/writeup.tex
-(c:/Users/Alex/Downloads/polynomial-multiplication-fft/writeup.tex/writeup.tex
+**c:/Users/Alex/Downloads/polynomial-multiplication-fft/writeup/writeup.tex
+(c:/Users/Alex/Downloads/polynomial-multiplication-fft/writeup/writeup.tex
 LaTeX2e <2023-11-01> patch level 1
 L3 programming layer <2024-01-04>
 (C:\Users\Alex\AppData\Local\Programs\MiKTeX\tex/latex/base\article.cls
@@ -240,44 +240,92 @@ Package uniquecounter Info: New unique counter `rerunfilecheck' on input line 28
 \Hy@SectionHShift=\skip53
 ) (C:\Users\Alex\AppData\Local\Programs\MiKTeX\tex/latex/parskip\parskip.sty
 Package: parskip 2021-03-14 v2.0h non-zero parskip adjustments
-) (C:\Users\Alex\AppData\Local\Programs\MiKTeX\tex/latex/l3backend\l3backend-pdftex.def
+) (C:\Users\Alex\AppData\Local\Programs\MiKTeX\tex/latex/wasysym\wasysym.sty
+Package: wasysym 2020/01/19 v2.4 Wasy-2 symbol support package
+\symwasy=\mathgroup6
+LaTeX Font Info:    Overwriting symbol font `wasy' in version `bold'
+(Font)                  U/wasy/m/n --> U/wasy/b/n on input line 93.
+) (C:\Users\Alex\AppData\Local\Programs\MiKTeX\tex/latex/adjustbox\adjustbox.sty
+Package: adjustbox 2022/10/17 v1.3a Adjusting TeX boxes (trim, clip, ...)
+ (C:\Users\Alex\AppData\Local\Programs\MiKTeX\tex/latex/xkeyval\xkeyval.sty
+Package: xkeyval 2022/06/16 v2.9 package option processing (HA)
+ (C:\Users\Alex\AppData\Local\Programs\MiKTeX\tex/generic/xkeyval\xkeyval.tex (C:\Users\Alex\AppData\Local\Programs\MiKTeX\tex/generic/xkeyval\xkvutils.tex
+\XKV@toks=\toks24
+\XKV@tempa@toks=\toks25
+)
+\XKV@depth=\count288
+File: xkeyval.tex 2014/12/03 v2.7a key=value parser (HA)
+)) (C:\Users\Alex\AppData\Local\Programs\MiKTeX\tex/latex/adjustbox\adjcalc.sty
+Package: adjcalc 2012/05/16 v1.1 Provides advanced setlength with multiple back-ends (calc, etex, pgfmath)
+) (C:\Users\Alex\AppData\Local\Programs\MiKTeX\tex/latex/adjustbox\trimclip.sty
+Package: trimclip 2020/08/19 v1.2 Trim and clip general TeX material
+ (C:\Users\Alex\AppData\Local\Programs\MiKTeX\tex/latex/collectbox\collectbox.sty
+Package: collectbox 2022/10/17 v0.4c Collect macro arguments as boxes
+\collectedbox=\box53
+)
+\tc@llx=\dimen164
+\tc@lly=\dimen165
+\tc@urx=\dimen166
+\tc@ury=\dimen167
+Package trimclip Info: Using driver 'tc-pdftex.def'.
+ (C:\Users\Alex\AppData\Local\Programs\MiKTeX\tex/latex/adjustbox\tc-pdftex.def
+File: tc-pdftex.def 2019/01/04 v2.2 Clipping driver for pdftex
+))
+\adjbox@Width=\dimen168
+\adjbox@Height=\dimen169
+\adjbox@Depth=\dimen170
+\adjbox@Totalheight=\dimen171
+\adjbox@pwidth=\dimen172
+\adjbox@pheight=\dimen173
+\adjbox@pdepth=\dimen174
+\adjbox@ptotalheight=\dimen175
+ (C:\Users\Alex\AppData\Local\Programs\MiKTeX\tex/latex/ifoddpage\ifoddpage.sty
+Package: ifoddpage 2022/10/18 v1.2 Conditionals for odd/even page detection
+\c@checkoddpage=\count289
+) (C:\Users\Alex\AppData\Local\Programs\MiKTeX\tex/latex/varwidth\varwidth.sty
+Package: varwidth 2009/03/30 ver 0.92;  Variable-width minipages
+\@vwid@box=\box54
+\sift@deathcycles=\count290
+\@vwid@loff=\dimen176
+\@vwid@roff=\dimen177
+)) (C:\Users\Alex\AppData\Local\Programs\MiKTeX\tex/latex/l3backend\l3backend-pdftex.def
 File: l3backend-pdftex.def 2024-01-04 L3 backend support: PDF output (pdfTeX)
-\l__color_backend_stack_int=\count288
-\l__pdf_internal_box=\box53
+\l__color_backend_stack_int=\count291
+\l__pdf_internal_box=\box55
 ) (writeup.aux)
 \openout1 = `writeup.aux'.
 
-LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 14.
-LaTeX Font Info:    ... okay on input line 14.
-LaTeX Font Info:    Checking defaults for OMS/cmsy/m/n on input line 14.
-LaTeX Font Info:    ... okay on input line 14.
-LaTeX Font Info:    Checking defaults for OT1/cmr/m/n on input line 14.
-LaTeX Font Info:    ... okay on input line 14.
-LaTeX Font Info:    Checking defaults for T1/cmr/m/n on input line 14.
-LaTeX Font Info:    ... okay on input line 14.
-LaTeX Font Info:    Checking defaults for TS1/cmr/m/n on input line 14.
-LaTeX Font Info:    ... okay on input line 14.
-LaTeX Font Info:    Checking defaults for OMX/cmex/m/n on input line 14.
-LaTeX Font Info:    ... okay on input line 14.
-LaTeX Font Info:    Checking defaults for U/cmr/m/n on input line 14.
-LaTeX Font Info:    ... okay on input line 14.
-LaTeX Font Info:    Checking defaults for PD1/pdf/m/n on input line 14.
-LaTeX Font Info:    ... okay on input line 14.
-LaTeX Font Info:    Checking defaults for PU/pdf/m/n on input line 14.
-LaTeX Font Info:    ... okay on input line 14.
+LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 16.
+LaTeX Font Info:    ... okay on input line 16.
+LaTeX Font Info:    Checking defaults for OMS/cmsy/m/n on input line 16.
+LaTeX Font Info:    ... okay on input line 16.
+LaTeX Font Info:    Checking defaults for OT1/cmr/m/n on input line 16.
+LaTeX Font Info:    ... okay on input line 16.
+LaTeX Font Info:    Checking defaults for T1/cmr/m/n on input line 16.
+LaTeX Font Info:    ... okay on input line 16.
+LaTeX Font Info:    Checking defaults for TS1/cmr/m/n on input line 16.
+LaTeX Font Info:    ... okay on input line 16.
+LaTeX Font Info:    Checking defaults for OMX/cmex/m/n on input line 16.
+LaTeX Font Info:    ... okay on input line 16.
+LaTeX Font Info:    Checking defaults for U/cmr/m/n on input line 16.
+LaTeX Font Info:    ... okay on input line 16.
+LaTeX Font Info:    Checking defaults for PD1/pdf/m/n on input line 16.
+LaTeX Font Info:    ... okay on input line 16.
+LaTeX Font Info:    Checking defaults for PU/pdf/m/n on input line 16.
+LaTeX Font Info:    ... okay on input line 16.
  (C:\Users\Alex\AppData\Local\Programs\MiKTeX\tex/context/base/mkii\supp-pdf.mkii
 [Loading MPS to PDF converter (version 2006.09.02).]
-\scratchcounter=\count289
-\scratchdimen=\dimen164
-\scratchbox=\box54
-\nofMPsegments=\count290
-\nofMParguments=\count291
-\everyMPshowfont=\toks24
-\MPscratchCnt=\count292
-\MPscratchDim=\dimen165
-\MPnumerator=\count293
-\makeMPintoPDFobject=\count294
-\everyMPtoPDFconversion=\toks25
+\scratchcounter=\count292
+\scratchdimen=\dimen178
+\scratchbox=\box56
+\nofMPsegments=\count293
+\nofMParguments=\count294
+\everyMPshowfont=\toks26
+\MPscratchCnt=\count295
+\MPscratchDim=\dimen179
+\MPnumerator=\count296
+\makeMPintoPDFobject=\count297
+\everyMPtoPDFconversion=\toks27
 ) (C:\Users\Alex\AppData\Local\Programs\MiKTeX\tex/latex/epstopdf-pkg\epstopdf-base.sty
 Package: epstopdf-base 2020-01-24 v2.11 Base part for package epstopdf
 Package epstopdf-base Info: Redefining graphics rule for `.eps' on input line 485.
@@ -318,21 +366,157 @@ File: epstopdf-sys.cfg 2021/03/18 v2.0 Configuration of epstopdf for MiKTeX
 * \@reversemarginfalse
 * (1in=72.27pt=25.4mm, 1cm=28.453pt)
 
-Package hyperref Info: Link coloring OFF on input line 14.
+Package hyperref Info: Link coloring OFF on input line 16.
 (writeup.out) (writeup.out)
 \@outlinefile=\write3
 \openout3 = `writeup.out'.
 
-LaTeX Font Info:    Trying to load font information for U+msa on input line 17.
+LaTeX Font Info:    Trying to load font information for U+msa on input line 19.
  (C:\Users\Alex\AppData\Local\Programs\MiKTeX\tex/latex/amsfonts\umsa.fd
 File: umsa.fd 2013/01/14 v3.01 AMS symbols A
 )
-LaTeX Font Info:    Trying to load font information for U+msb on input line 17.
+LaTeX Font Info:    Trying to load font information for U+msb on input line 19.
  (C:\Users\Alex\AppData\Local\Programs\MiKTeX\tex/latex/amsfonts\umsb.fd
 File: umsb.fd 2013/01/14 v3.01 AMS symbols B
+)
+LaTeX Font Info:    Trying to load font information for U+wasy on input line 19.
+ (C:\Users\Alex\AppData\Local\Programs\MiKTeX\tex/latex/wasysym\uwasy.fd
+File: uwasy.fd 2020/01/19 v2.4 Wasy-2 symbol font definitions
 ) [1
 
-{C:/Users/Alex/AppData/Local/MiKTeX/fonts/map/pdftex/pdftex.map}] [2] [3] (writeup.aux)
+{C:/Users/Alex/AppData/Local/MiKTeX/fonts/map/pdftex/pdftex.map}] [2]
+
+pdfTeX warning: pdflatex (file ./icons/0.pdf): PDF inclusion: found PDF version <1.7>, but at most version <1.5> allowed
+<icons/0.pdf, id=53, 385.49382pt x 385.49382pt>
+File: icons/0.pdf Graphic file (type pdf)
+<use icons/0.pdf>
+Package pdftex.def Info: icons/0.pdf  used on input line 162.
+(pdftex.def)             Requested size: 9.99965pt x 10.00002pt.
+File: icons/0.pdf Graphic file (type pdf)
+<use icons/0.pdf>
+Package pdftex.def Info: icons/0.pdf  used on input line 163.
+(pdftex.def)             Requested size: 9.99965pt x 10.00002pt.
+File: icons/0.pdf Graphic file (type pdf)
+<use icons/0.pdf>
+Package pdftex.def Info: icons/0.pdf  used on input line 164.
+(pdftex.def)             Requested size: 9.99965pt x 10.00002pt.
+File: icons/0.pdf Graphic file (type pdf)
+<use icons/0.pdf>
+Package pdftex.def Info: icons/0.pdf  used on input line 165.
+(pdftex.def)             Requested size: 9.99965pt x 10.00002pt.
+File: icons/0.pdf Graphic file (type pdf)
+<use icons/0.pdf>
+Package pdftex.def Info: icons/0.pdf  used on input line 166.
+(pdftex.def)             Requested size: 9.99965pt x 10.00002pt.
+File: icons/0.pdf Graphic file (type pdf)
+<use icons/0.pdf>
+Package pdftex.def Info: icons/0.pdf  used on input line 167.
+(pdftex.def)             Requested size: 9.99965pt x 10.00002pt.
+File: icons/0.pdf Graphic file (type pdf)
+<use icons/0.pdf>
+Package pdftex.def Info: icons/0.pdf  used on input line 168.
+(pdftex.def)             Requested size: 9.99965pt x 10.00002pt.
+File: icons/0.pdf Graphic file (type pdf)
+<use icons/0.pdf>
+Package pdftex.def Info: icons/0.pdf  used on input line 169.
+(pdftex.def)             Requested size: 9.99965pt x 10.00002pt.
+File: icons/0.pdf Graphic file (type pdf)
+<use icons/0.pdf>
+Package pdftex.def Info: icons/0.pdf  used on input line 172.
+(pdftex.def)             Requested size: 9.99965pt x 10.00002pt.
+File: icons/0.pdf Graphic file (type pdf)
+<use icons/0.pdf>
+Package pdftex.def Info: icons/0.pdf  used on input line 173.
+(pdftex.def)             Requested size: 9.99965pt x 10.00002pt.
+File: icons/0.pdf Graphic file (type pdf)
+<use icons/0.pdf>
+Package pdftex.def Info: icons/0.pdf  used on input line 174.
+(pdftex.def)             Requested size: 9.99965pt x 10.00002pt.
+File: icons/0.pdf Graphic file (type pdf)
+<use icons/0.pdf>
+Package pdftex.def Info: icons/0.pdf  used on input line 175.
+(pdftex.def)             Requested size: 9.99965pt x 10.00002pt.
+File: icons/0.pdf Graphic file (type pdf)
+<use icons/0.pdf>
+Package pdftex.def Info: icons/0.pdf  used on input line 176.
+(pdftex.def)             Requested size: 9.99965pt x 10.00002pt.
+File: icons/0.pdf Graphic file (type pdf)
+<use icons/0.pdf>
+Package pdftex.def Info: icons/0.pdf  used on input line 177.
+(pdftex.def)             Requested size: 9.99965pt x 10.00002pt.
+File: icons/0.pdf Graphic file (type pdf)
+<use icons/0.pdf>
+Package pdftex.def Info: icons/0.pdf  used on input line 178.
+(pdftex.def)             Requested size: 9.99965pt x 10.00002pt.
+File: icons/0.pdf Graphic file (type pdf)
+<use icons/0.pdf>
+Package pdftex.def Info: icons/0.pdf  used on input line 179.
+(pdftex.def)             Requested size: 9.99965pt x 10.00002pt.
+File: icons/0.pdf Graphic file (type pdf)
+<use icons/0.pdf>
+Package pdftex.def Info: icons/0.pdf  used on input line 182.
+(pdftex.def)             Requested size: 9.99965pt x 10.00002pt.
+File: icons/0.pdf Graphic file (type pdf)
+<use icons/0.pdf>
+Package pdftex.def Info: icons/0.pdf  used on input line 182.
+(pdftex.def)             Requested size: 9.99965pt x 10.00002pt.
+File: icons/0.pdf Graphic file (type pdf)
+<use icons/0.pdf>
+Package pdftex.def Info: icons/0.pdf  used on input line 183.
+(pdftex.def)             Requested size: 9.99965pt x 10.00002pt.
+File: icons/0.pdf Graphic file (type pdf)
+<use icons/0.pdf>
+Package pdftex.def Info: icons/0.pdf  used on input line 183.
+(pdftex.def)             Requested size: 9.99965pt x 10.00002pt.
+File: icons/0.pdf Graphic file (type pdf)
+<use icons/0.pdf>
+Package pdftex.def Info: icons/0.pdf  used on input line 184.
+(pdftex.def)             Requested size: 9.99965pt x 10.00002pt.
+File: icons/0.pdf Graphic file (type pdf)
+<use icons/0.pdf>
+Package pdftex.def Info: icons/0.pdf  used on input line 184.
+(pdftex.def)             Requested size: 9.99965pt x 10.00002pt.
+File: icons/0.pdf Graphic file (type pdf)
+<use icons/0.pdf>
+Package pdftex.def Info: icons/0.pdf  used on input line 185.
+(pdftex.def)             Requested size: 9.99965pt x 10.00002pt.
+File: icons/0.pdf Graphic file (type pdf)
+<use icons/0.pdf>
+Package pdftex.def Info: icons/0.pdf  used on input line 185.
+(pdftex.def)             Requested size: 9.99965pt x 10.00002pt.
+File: icons/0.pdf Graphic file (type pdf)
+<use icons/0.pdf>
+Package pdftex.def Info: icons/0.pdf  used on input line 186.
+(pdftex.def)             Requested size: 9.99965pt x 10.00002pt.
+File: icons/0.pdf Graphic file (type pdf)
+<use icons/0.pdf>
+Package pdftex.def Info: icons/0.pdf  used on input line 186.
+(pdftex.def)             Requested size: 9.99965pt x 10.00002pt.
+File: icons/0.pdf Graphic file (type pdf)
+<use icons/0.pdf>
+Package pdftex.def Info: icons/0.pdf  used on input line 187.
+(pdftex.def)             Requested size: 9.99965pt x 10.00002pt.
+File: icons/0.pdf Graphic file (type pdf)
+<use icons/0.pdf>
+Package pdftex.def Info: icons/0.pdf  used on input line 187.
+(pdftex.def)             Requested size: 9.99965pt x 10.00002pt.
+File: icons/0.pdf Graphic file (type pdf)
+<use icons/0.pdf>
+Package pdftex.def Info: icons/0.pdf  used on input line 188.
+(pdftex.def)             Requested size: 9.99965pt x 10.00002pt.
+File: icons/0.pdf Graphic file (type pdf)
+<use icons/0.pdf>
+Package pdftex.def Info: icons/0.pdf  used on input line 188.
+(pdftex.def)             Requested size: 9.99965pt x 10.00002pt.
+File: icons/0.pdf Graphic file (type pdf)
+<use icons/0.pdf>
+Package pdftex.def Info: icons/0.pdf  used on input line 189.
+(pdftex.def)             Requested size: 9.99965pt x 10.00002pt.
+File: icons/0.pdf Graphic file (type pdf)
+<use icons/0.pdf>
+Package pdftex.def Info: icons/0.pdf  used on input line 189.
+(pdftex.def)             Requested size: 9.99965pt x 10.00002pt.
+[3 <./icons/0.pdf>] (writeup.aux)
  ***********
 LaTeX2e <2023-11-01> patch level 1
 L3 programming layer <2024-01-04>
@@ -341,17 +525,17 @@ Package rerunfilecheck Info: File `writeup.out' has not changed.
 (rerunfilecheck)             Checksum: 74F2D9442D1A5EABED61DA9BEDF11DB2;497.
  ) 
 Here is how much of TeX's memory you used:
- 9703 strings out of 474486
- 151412 string characters out of 5744228
+ 11057 strings out of 474486
+ 174313 string characters out of 5744228
  1953542 words of memory out of 5000000
- 31857 multiletter control sequences out of 15000+600000
- 566305 words of font info for 68 fonts, out of 8000000 for 9000
+ 33165 multiletter control sequences out of 15000+600000
+ 567620 words of font info for 74 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
- 75i,17n,79p,617b,437s stack positions out of 10000i,1000n,20000p,200000b,200000s
+ 75i,17n,79p,824b,437s stack positions out of 10000i,1000n,20000p,200000b,200000s
  <C:\Users\Alex\AppData\Local\MiKTeX\fonts/pk/ljfour/jknappen/ec/dpi600\tcrm1000.pk><C:/Users/Alex/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmbx12.pfb><C:/Users/Alex/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmex10.pfb><C:/Users/Alex/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmmi10.pfb><C:/Users/Alex/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmmi12.pfb><C:/Users/Alex/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmmi5.pfb><C:/Users/Alex/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmmi7.pfb><C:/Users/Alex/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmr10.pfb><C:/Users/Alex/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmr12.pfb><C:/Users/Alex/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmr17.pfb><C:/Users/Alex/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmr5.pfb><C:/Users/Alex/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmr7.pfb><C:/Users/Alex/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmsy10.pfb><C:/Users/Alex/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmsy7.pfb><C:/Users/Alex/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmti10.pfb><C:/Users/Alex/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/symbols/msbm10.pfb>
-Output written on writeup.pdf (3 pages, 178019 bytes).
+Output written on writeup.pdf (3 pages, 193126 bytes).
 PDF statistics:
- 128 PDF objects out of 1000 (max. 8388607)
+ 131 PDF objects out of 1000 (max. 8388607)
  13 named destinations out of 1000 (max. 500000)
- 41 words of extra memory for PDF output out of 10000 (max. 10000000)
+ 46 words of extra memory for PDF output out of 10000 (max. 10000000)
 

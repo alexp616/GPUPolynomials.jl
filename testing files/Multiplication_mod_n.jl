@@ -130,10 +130,12 @@ end
 # insane trying to find an answer to a problem that doesn't exist
 
 
-p1 = [1,2,3,4,0,0,0,0]
-p2 = [1,2,3,4]
+p1 = [1,2,3,4]
+p2 = [1,1,1,1]
 
-println(ntt(p1, 8, 3, 5))
+println(modnMultiply(p1, p2, 5))
+
+# println(ntt(p1, 8, 3, 5))
 
 # modnMultiply(p1, p2, 5)
 
