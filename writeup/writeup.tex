@@ -197,6 +197,21 @@ Note that letting $n$ be a different power $n=m^k$ gives access to a radix-m ver
 
 However, since we want to parallelize this, and not all NVIDIA GPUs support recursion yet, we need a way to build this algorithm bottom-up.
 
+write cooley-tukey
+
 Now our algorithm is $O(n \log_2n)$, asymptotically much better than our trivial $O(n^2)$ algorithm.
 
+\section{Multidimensional DFT}
+
+\section{Parallelization}
+
+\section{NTT}
+
+Because the end goal is to multiply very high degree polynomials in $\mathbb{F}_p[x]$, (polynomials with coefficients that are elements of the field of integers mod p, $\mathbb{F}_p$), the complex DFT starts to lose viability because of very large floats that lose precision, and there is no trivial way to embed mod p into $\mathbb{C}$
+
+
+
+
+
 \end{document}
+
