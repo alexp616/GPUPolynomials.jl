@@ -1,5 +1,5 @@
 # Fdb version 4
-["pdflatex"] 1712432670.91868 "c:/Users/Alex/Downloads/polynomial-multiplication-fft/writeup/writeup.tex" "writeup.pdf" "writeup" 1712432671.87057 0
+["pdflatex"] 1712722283.1945 "c:/Users/Alex/Downloads/polynomial-multiplication-fft/writeup/writeup.tex" "writeup.pdf" "writeup" 1712722284.16169 0
   "C:/Users/Alex/AppData/Local/MiKTeX/fonts/map/pdftex/pdftex.map" 1712179523 81760 910369822cd2d7c359b2482f4c0de4ca ""
   "C:/Users/Alex/AppData/Local/MiKTeX/fonts/pk/ljfour/jknappen/ec/dpi600/tcrm1000.pk" 1712112269 11548 39efeafed6327b033d5cc0a917c49dba ""
   "C:/Users/Alex/AppData/Local/MiKTeX/miktex/data/le/pdftex/pdflatex.fmt" 1711990881 24224573 07cca7181cb9494b8d637cbebaf00535 ""
@@ -12,6 +12,7 @@
   "C:/Users/Alex/AppData/Local/Programs/MiKTeX/fonts/tfm/public/amsfonts/symbols/msbm10.tfm" 1233951854 908 2921f8a10601f252058503cc6570e581 ""
   "C:/Users/Alex/AppData/Local/Programs/MiKTeX/fonts/tfm/public/amsfonts/symbols/msbm5.tfm" 1233951854 940 75ac932a52f80982a9f8ea75d03a34cf ""
   "C:/Users/Alex/AppData/Local/Programs/MiKTeX/fonts/tfm/public/amsfonts/symbols/msbm7.tfm" 1233951854 940 228d6584342e91276bf566bcf9716b83 ""
+  "C:/Users/Alex/AppData/Local/Programs/MiKTeX/fonts/tfm/public/cm/cmbx10.tfm" 1136765053 1328 c834bbb027764024c09d3d2bf908b5f0 ""
   "C:/Users/Alex/AppData/Local/Programs/MiKTeX/fonts/tfm/public/cm/cmbx12.tfm" 1136765053 1324 c910af8c371558dc20f2d7822f66fe64 ""
   "C:/Users/Alex/AppData/Local/Programs/MiKTeX/fonts/tfm/public/cm/cmex10.tfm" 1136765053 992 662f679a0b3d2d53c1b94050fdaa3f50 ""
   "C:/Users/Alex/AppData/Local/Programs/MiKTeX/fonts/tfm/public/cm/cmmi12.tfm" 1136765053 1524 4414a8315f39513458b80dfc63bff03a ""
@@ -30,6 +31,7 @@
   "C:/Users/Alex/AppData/Local/Programs/MiKTeX/fonts/tfm/public/wasy/wasy6.tfm" 1578656733 912 8da0595e5e615d33e0b2860959a58bf8 ""
   "C:/Users/Alex/AppData/Local/Programs/MiKTeX/fonts/tfm/public/wasy/wasy7.tfm" 1578656728 912 e43f3049348c6f2670d3b324e657c6e7 ""
   "C:/Users/Alex/AppData/Local/Programs/MiKTeX/fonts/tfm/public/wasy/wasy8.tfm" 1578656721 904 a3deb54664adaaa632c6cdee911ffe34 ""
+  "C:/Users/Alex/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmbx10.pfb" 1247596666 34811 78b52f49e893bcba91bd7581cdc144c0 ""
   "C:/Users/Alex/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmbx12.pfb" 1247596666 32080 340ef9bf63678554ee606688e7b5339d ""
   "C:/Users/Alex/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmex10.pfb" 1247596667 30251 6afa5cb1d0204815a708a080681d4674 ""
   "C:/Users/Alex/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmmi10.pfb" 1247596667 36299 5f9df58c2139e7edcf37c8fca4bd384d ""
@@ -110,11 +112,11 @@
   "C:/Users/Alex/AppData/Local/Programs/MiKTeX/tex/latex/wasysym/uwasy.fd" 1579693002 2296 c50bf1089c7a46a0d4e9a119e980be4e ""
   "C:/Users/Alex/AppData/Local/Programs/MiKTeX/tex/latex/wasysym/wasysym.sty" 1579693002 11252 7fbfbe7bbcbe1f73acbe32ae2f10c666 ""
   "C:/Users/Alex/AppData/Local/Programs/MiKTeX/tex/latex/xkeyval/xkeyval.sty" 1656236919 4937 4ce600ce9bd4ec84d0250eb6892fcf4f ""
-  "c:/Users/Alex/Downloads/polynomial-multiplication-fft/writeup/writeup.tex" 1712432670 15080 7fd25e613b1f51c620086bcff82d961d ""
+  "c:/Users/Alex/Downloads/polynomial-multiplication-fft/writeup/writeup.tex" 1712722282 18732 778b93dee6465d843e4c00f78f166237 ""
   "icons/0.pdf" 1712179126 10688 6309579516713df9509ae61598157b39 ""
-  "writeup.aux" 1712432671 1082 cb03202c650d4f6280c96492022ac0cb "pdflatex"
-  "writeup.out" 1712432671 819 2d1702becc4ca5c065e0a21366d78011 "pdflatex"
-  "writeup.tex" 1712432670 15080 7fd25e613b1f51c620086bcff82d961d ""
+  "writeup.aux" 1712722283 1220 7ee680e1c982d8d4a19420614bfcfb64 "pdflatex"
+  "writeup.out" 1712722283 1082 bb8189abaae75647c1207a4c8366af34 "pdflatex"
+  "writeup.tex" 1712722282 18732 778b93dee6465d843e4c00f78f166237 ""
   (generated)
   "writeup.aux"
   "writeup.log"

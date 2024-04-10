@@ -203,6 +203,8 @@ Now our algorithm is $O(n \log_2n)$, asymptotically much better than our trivial
 
 \section{Multidimensional DFT}
 
+Going back to polynomial interpolation, say we have $n+1$ points in $\mathbb{R}^{m+1}$, denoted by $(\vec{x}_0,y_0), (\vec{x}_1,y_1), ... , (\vec{x}_n,y_n)$, where $\vec{x}_i$ are vectors in $\mathbb{R}^{m}$. Then, there exists a polynomial of $m$ variables, with degree at most $n$, that passes through all of the $n+1$ points.
+
 
 
 \section{Parallelization}
@@ -298,5 +300,47 @@ To do a quick example, let's say we want to multiply $1+2x$ and $3+4x\mod 5$. Ou
 
 So, we do indeed get the right output as our vector.
 However, we won't necessarily be so lucky to have an $n$th principal root of unity, and we absolutely won't have a principal root of unity when the degree of the polynomial is greater than the order of the field. So, we instead need to look at $GF(p^n)$
+
+
+\section{Pascal's Hypertriangle (Pascal's Simplex)}
+Just as Pascal's Triangle is referenced to compute the coefficients of each term in a binomial expansion, Pascal's simplex can be used to compute the coefficients of each term in a multinomial expansion.
+
+Say we want to compute $(a_0 + a_1 + ... + a_k)^n$. The coefficient in front of the term $a_0^{d_0}a_1^{d_1}...a_k^{d_k}$ can be computed by $\frac{n!}{d_0!d_1!...d_k!}$. For example, if we wanted to expand $(a + b + c)^3$, then the coefficient in front of $a^2 b$ would be $\frac{3!}{2!1!0!}=2$. Note that the sum of all of the degrees of the result equals $n$, or $\sum_{i=0}^{k} d_i=n$
+
+Using stars and bars (distributing $n$ degrees amongst $k$ variables), we find that we have to compute $n + k - 1 \choose k-1$ coefficients.
+
+The intuitive way to apply this is to compute all of the coefficients, and given a multinomial, map every $n + k - 1 \choose k-1$ term to the coefficient in front of it, and add all of them up.
+
+There are a lot of optimizations and ways to speed this up in code that I propose.
+
+First of all, in the case of something like raising $(a+b+c)^5$, where $k=3$ and $n=5$, we expect $\binom{5 + 3 - 1}{3-1} = \binom{7}{2} = 21$ elements. However, the coefficient of $(0,0,5)$ is the same as the coefficient of $(5,0,0)$ and $(0,5,0)$. Listing out all of the possible combinations of degrees, we get 5 of them: $(0,0,5), (0,1,4), (0,2,3), (1,1,3), (1,2,2)$, a lot fewer than 21. There is no closed-form solution to count these (\href{https://en.wikipedia.org/wiki/Integer_partition}{Wikipedia}), but it is possible with recursion, and dynamic programming.
+
+Need to come up with a way in code to hash $(5,0,0),(0,5,0)$ to the binomial coefficient associated with $(5,0,0)$, and $(1,1,3)$ to the binomial coefficient associated with $(3,1,1)$.
+
+Also need a way to iterate through all possible combinations of degrees, with order not mattering.
+
+\textbf{Easy Multinomial Expansion Algorithm}
+
+Given a multinomial and a power: $(a_1 + a_2 + ... + a_k)^n$
+
+\begin{enumerate}
+    \item Make an array [0!, 1!, 2!, ..., n!] $O(n)$
+    \item Iterate through all $\binom{n+k-1}{k-1}$ terms of the expansion, and compute their binomial coefficients with $\frac{n!}{d_0!d_1! ... d_k!}$
+    \item done
+\end{enumerate}
+
+\textbf{Theoretical Multinomial Expansion Algorithm}:
+
+Given a multinomial and a power: $(a_1 + a_2 + ... + a_k)^n$
+
+\begin{enumerate}
+    \item Compute all ways to distribute $n$ identical balls into $k$ identical bins: Write code that in the case of $(n,k)=(5,3)$ makes the exact array $A=[(0,0,5),(0,1,4),(0,2,3),(1,1,3),(1,2,2)]$. For a fixed $k$, this step grows asymptotically at $x=\frac{1}{4n\sqrt{3}}e^{\pi\sqrt{\frac{2n}{3}}}$ (\href{https://en.wikipedia.org/wiki/Integer_partition}{Wikipedia}) $O(x)$
+    \item Make an array [0!, 1!, 2!, ..., n!] $O(n)$
+    \item For every element of $A$, calculate the coefficient: $\frac{n!}{d_1!d_2!d_3!}$, and store into new array $B$. $O(x)$
+    \item For every term in the $\binom{n+k-1}{k-1}$ terms of the expansion, develop a hashing algorithm that maps it to its corresponding coefficient in $B$ (to avoid searching and sorting). $O(\binom{n+k-1}{k-1})$
+\end{enumerate}
+
+I have no clue how to do steps 1 and 4 of the theoretical one
+
 \end{document}
 
