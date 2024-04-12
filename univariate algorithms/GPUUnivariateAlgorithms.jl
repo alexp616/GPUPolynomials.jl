@@ -1,6 +1,6 @@
 using CUDA
 using Test
-include("utils.jl")
+include("../utils.jl")
 
 """
 This file includes 3 main algorithms and their implementation on the GPU.
@@ -77,7 +77,7 @@ GPU-Parallelized version of cpuMultiply in CPUAlgorithms.jl
 """
 function GPUMultiply(p1, p2)
     # TODO Try putting everything into one method to see if significant change in speed
-    n = Int.(2^ceil(log2(length(p1) + length(p2) - 1)))
+    n = Int(2^ceil(log2(length(p1) + length(p2) - 1)))
     log2n = UInt32(log2(n));
     finalLength = length(p1) + length(p2) - 1
 

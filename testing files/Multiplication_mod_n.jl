@@ -142,3 +142,5 @@ println(modnMultiply(p1, p2, 5))
 
 # println(slowMultiply(p1, p2) .% 5)
 # println(modnMultiply(p1, p2, 5))
+
+println(nthPrincipalRootOfUnity(7, 3))

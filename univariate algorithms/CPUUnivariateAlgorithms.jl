@@ -1,5 +1,5 @@
 using Test
-include("utils.jl")
+include("../utils.jl")
 
 """
 This file includes 3 main algorithms and their implementation on the CPU.
@@ -43,7 +43,7 @@ Runs in O(nlogn) asymptotic time, where n is the degree of the resulting
 polynomial.
 """
 function CPUMultiply(p1, p2)
-    n = Int.(2^ceil(log2(length(p1) + length(p2) - 1)))
+    n = Int(2^ceil(log2(length(p1) + length(p2) - 1)))
     log2n = UInt32(log2(n));
     finalLength = length(p1) + length(p2) - 1
 

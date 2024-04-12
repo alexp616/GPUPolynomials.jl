@@ -1,8 +1,8 @@
 using Test
 using BenchmarkTools
 
-include("CPUAlgorithms.jl")
-include("GPUAlgorithms.jl")
+include("CPUUnivariateAlgorithms.jl")
+include("GPUUnivariateAlgorithms.jl")
 
 
 """
