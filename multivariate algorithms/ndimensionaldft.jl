@@ -1,5 +1,5 @@
 using Test
-include("..\\univariate algorithms\\CPUUnivariateAlgorithms.jl")
+include("../utils.jl")
 
 # CUDA.jl's only data structure is the CuArray, so everything is implemented
 # with arrays
@@ -17,9 +17,35 @@ polynomial2 = [
     1 0 4
 ]
 
+# Modified to move bit reversal algorithm outside
+function CPUDFT(p, n, log2n, inverted = 1)
+    for i in 1:log2n
+        m = 1 << i
+        m2 = m >> 1
+        theta = complex(1,0)
+        theta_m = cis(inverted * pi/m2)
+        for j in 0:m2-1
+            for k in j:m:n-1
+                t = theta * p[k + m2 + 1]
+                u = p[k + 1]
+
+                p[k + 1] = u + t
+                p[k + m2 + 1] = u - t
+            end
+            theta *= theta_m
+        end
+    end
+
+    return p
+end
+
+function CPUIDFT(y, n, log2n)
+    return CPUDFT(y, n, log2n, -1) ./ n
+end
+
 function print_matrix(matrix)
-    for i in 1:size(matrix, 1)
-        for j in 1:size(matrix, 2)
+    for i in axes(matrix, 1)
+        for j in axes(matrix, 2)
             print(matrix[i, j], "\t")
         end
         println()
@@ -76,29 +102,52 @@ function padMatrix(matrix, r, c)
     return addZeroCols(addZeroRows(m, r), c)
 end
 
-function DFT2d(input::AbstractArray, rows, log2rows, cols, log2cols, inverted = 1)
-    # TODO for every vector v in dim1, replace with DFT1d(v)
+function bitReverseCopy(input::AbstractArray, temp::AbstractArray, dims::Tuple, log2dims::Tuple)
+    flag = true
+    for dim in eachindex(dims)
+        for i in 0:dims[dim] - 1
+            rev = bitReverse(i, log2dims[i])
+            if flag
+                temp[]
+            end
+        end
+    end
+    for i in 0:rows-1
+        rev = bitReverse(i, log2rows)
+        output[i + 1, :] = input[rev + 1]
+    end
+    for j in 0:cols-1
+        rev = bitReverse(j, log2cols)
+        output[:, j + 1]
+    end
+end
+
+
+function DFT2d(input::AbstractArray, dims::Tuple, log2dims::Tuple, inverted = 1)
+    result = zeros(ComplexF32, dims)
+    bitReverseCopy(input, result)
+
     if inverted == 1
-        for i in 1:size(input, 2)  # Iterate over columns
-            input[:, i] .= CPUDFT(input[:, i], rows, log2rows)
+        for i in axes(result, 2)
+            result[:, i] .= CPUDFT(result[:, i], rows, log2rows)
         end
 
-        for i in 1:size(input, 1)  # Iterate over rows
-            input[i, :] .= CPUDFT(input[i, :], cols, log2cols)
+        for j in axes(result, 1)
+            result[j, :] .= CPUDFT(result[j, :], cols, log2cols)
         end
     end
 
     if inverted == -1
-        for i in 1:size(input, 2)  # Iterate over columns
-            input[:, i] .= CPUIDFT(input[:, i], rows, log2rows)
+        for i in axes(result, 2)
+            result[:, i] .= CPUIDFT(result[:, i], rows, log2rows)
         end
 
-        for i in 1:size(input, 1)  # Iterate over rows
-            input[i, :] .= CPUIDFT(input[i, :], cols, log2cols)
+        for j in axes(result, 1)
+            result[j, :] .= CPUIDFT(result[j, :], cols, log2cols)
         end
     end
 
-    return input
+    return result
 end
 
 function IDFT2d(input::AbstractArray, rows, log2rows, cols, log2cols)
@@ -108,7 +157,7 @@ end
 function multiply2d(polynomial1, polynomial2)
     # Figure out dimensions of resulting product, pad to 2^n power
 
-    # resultSize stores (col, row)
+    # resultSize stores (cols, rows)
     resultSize = getHighestDegrees(polynomial1) .+ getHighestDegrees(polynomial2) .+ 1
 
     rows = Int.(2^ceil(log2(resultSize[2])))
@@ -132,14 +181,3 @@ function multiply2d(polynomial1, polynomial2)
 end
 
 print_matrix(multiply2d(polynomial1, polynomial2))
-
-
-
-testpoly = [
-    1 0 0 1 0
-    1 0 1 0 0
-    1 0 0 0 0
-]
-
-@test getHighestDegrees(testpoly) == (3, 2)
-

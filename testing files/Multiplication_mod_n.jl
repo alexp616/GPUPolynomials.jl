@@ -23,31 +23,36 @@ end
 function nthPrincipalRootOfUnity(p, n)
     # numbers satisfying a^n = 1
     candidates = []
+    results = []
 
-    for i in 1:p-1
+    for i in 2:p-1
+        println("i^n: $(i^n), i: $i")
         if i^n % p == 1
             push!(candidates, i)
         end
     end
 
+    # println("candidates: $candidates")
     while length(candidates) > 0
+        flag = true
         for k in 1:n-1
-            sum = 0
-            for j in 0:n-1
-                sum += candidates[1]^(k * j)
+            if candidates[1] ^ k % p == 1
+                flag = false
+                break
             end
-            if sum % p == 0
-                # TODO polish data typing
-                return candidates[1]
-            end
+        end
+        if flag 
+            push!(results, candidates[1])
         end
         popfirst!(candidates)
     end
 
+    return results
+
     # No idea if this can theoretically ever happen.
     # No idea if the nth principal root(s)? of unity is unique.
     # I'll figure it out another day
-    error("p doesn't have an nth principal root of unity")
+    error("$p doesn't have a $n th principal root of unity")
 end
 
 # Added principal root of unity method, replaced:
@@ -133,7 +138,7 @@ end
 p1 = [1,2,3,4]
 p2 = [1,1,1,1]
 
-println(modnMultiply(p1, p2, 5))
+# println(modnMultiply(p1, p2, 5))
 
 # println(ntt(p1, 8, 3, 5))
 
@@ -143,4 +148,4 @@ println(modnMultiply(p1, p2, 5))
 # println(slowMultiply(p1, p2) .% 5)
 # println(modnMultiply(p1, p2, 5))
 
-println(nthPrincipalRootOfUnity(7, 3))
+println(nthPrincipalRootOfUnity(125, 100))
