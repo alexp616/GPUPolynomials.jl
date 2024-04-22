@@ -1,5 +1,11 @@
 using Test
+using BenchmarkTools
 
+"""
+    factorial_mod_m(n, m)
+
+Calculate n! mod m
+"""
 function factorial_mod_m(n, m)
     result = 1
     for i in 2:n
@@ -10,6 +16,14 @@ function factorial_mod_m(n, m)
 end
 @test factorial_mod_m(6, 7) == 6
 
+
+"""
+    compute_inverses_mod_m(m)
+
+Return array of multiplicative inverses of a mod m for 1 <= a < m
+
+After assigning the return array to arr, simply do arr[a] for the inverse of a mod m
+"""
 function compute_inverses_mod_m(m)
     result = zeros(Int, m-1)
     for i in 1:m-1
@@ -26,35 +40,42 @@ function compute_inverses_mod_m(m)
 end
 @test compute_inverses_mod_m(7) == [1, 4, 5, 2, 3, 6]
 
-function get_num_variables(p)
-    return length(p[1][2])
-end
-@test get_num_variables([[1, [1, 0, 0, 0]]]) == 4
+"""
+    raise_to_mminus1_mod_m(p, m)
 
-function raise_to_n_mod_m(p, n, m)
+Return p^(m-1) mod m
+"""
+function raise_to_mminus1_mod_m(p, m, termPowers = nothing)
     inverses = compute_inverses_mod_m(m)
 
-    # termPowers is all possible combinations of powers of the polynomial
+    # termPowers is all possible combinations of powers of the terms of the polynomial
     # if the polynomial has 3 terms to be raised to the 4th then termPowers contains
     # [4, 0, 0], [0, 4, 0], [0, 0, 4], [3, 1, 0] ... etc
-    termPowers = generate_partitions(n, length(p), [])
+    
+    if termPowers === nothing
+        termPowers = generate_partitions(m - 1, length(p))
+    else
+        try
+            if length(termPowers) != binomial(m + length(p) - 2, length(p) - 1)
+                throw("termPowers not valid")
+            end
+        catch e
+            throw("termPowers not valid")
+        end
+    end
+
     result = [copy(p[1]) for i in eachindex(termPowers)]
-    nfac = factorial(n)
 
     for i in eachindex(termPowers)
-        coeff = nfac
         # coeff = factorial_mod_m(n, m)
         degrees = zeros(Int, length(p[1][2]))
-        # coeff = m - 1
-        println("---------------------")
+        coeff = m - 1
         for j in eachindex(termPowers[i])
-            coeff ÷= factorial(termPowers[i][j])
-            # coeff *= inverses[factorial_mod_m(termPowers[i][j], m)]
-            
-            coeff *= p[j][1] ^ termPowers[i][j]
+            @inbounds coeff *= inverses[factorial_mod_m(termPowers[i][j], m)]
+            @inbounds coeff *= p[j][1] ^ termPowers[i][j]
         
-            # coeff %= m
-            degrees += termPowers[i][j] .* p[j][2]
+            coeff = coeff % m
+            @inbounds degrees += termPowers[i][j] .* p[j][2]
 
         end
         result[i][1] = coeff
@@ -64,25 +85,53 @@ function raise_to_n_mod_m(p, n, m)
     return result
 end
 
+"""
+    generate_partitions(n, k)
 
+Return all possible ways to distribute n identical balls into k distinct boxes.
+"""
+function generate_partitions(n, k)
+    partitions = []
+    stack = [(n, k, [])]
 
-function generate_partitions(n, k, current_partition)
-    if n == 0 && k == 0
-        return [current_partition]
-    elseif n >= 0 && k > 0
-        partitions = []
-        for i in 0:n
-            new_partition = push!(copy(current_partition), i)
-            partitions = vcat(partitions, generate_partitions(n - i, k - 1, new_partition))
+    while !isempty(stack)
+        n, k, current_partition = pop!(stack)
+        if n == 0 && k == 0
+            push!(partitions, current_partition)
+        elseif n >= 0 && k > 0
+            for i in 0:n
+                new_partition = copy(current_partition)
+                push!(new_partition, i)
+                push!(stack, (n - i, k - 1, new_partition))
+            end
         end
-        return partitions
     end
-    return []
+
+    return partitions
 end
 
-polynomial = [[2, [1, 1]], [3, [0, 1]]]
-raise_to_n_mod_m(polynomial, 4, 5)
+"""
+    generate_termPowers(p, m)
 
-# partitions = generate_partitions(n, k, [])
+Pre-generate resulting representations of p^m-1 mod m
+"""
+function generate_termPowers(p, m)
+    return generate_partitions(m - 1, length(p))
+end
 
-# println(partitions)
+# testpoly = [[1, [0, 0, 1]], [2, [0, 2, 0]], [3, [3, 0, 0]]]
+# pregen = generate_termPowers(testpoly, 5)
+
+# @test raise_to_mminus1_mod_m(testpoly, 5, pregen) == raise_to_mminus1_mod_m(testpoly, 5)
+
+polynomial1 = [[2, [2, 3, 1]], [2, [1, 2, 3]], [3, [3, 2, 1]], [5, [1, 1, 4]], [4, [4, 1, 1]], [3, [6, 0, 0]]]
+
+println("Time to compute p^m-1 mod m without pre-generating coefficients")
+@btime raise_to_mminus1_mod_m(polynomial1, 31)
+
+println("Time to pre-generate coefficients")
+pregen = generate_termPowers(polynomial1, 31)
+@btime generate_termPowers(polynomial1, 31)
+
+println("Time to compute p^m-1 mod m with pre-generated coefficients")
+@btime raise_to_mminus1_mod_m(polynomial1, 31, pregen)

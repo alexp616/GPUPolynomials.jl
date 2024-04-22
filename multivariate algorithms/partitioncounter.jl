@@ -28,10 +28,10 @@ Generate an array of all possible partitions of n
 identical balls into k boxes
 """
 function generate_partitions(n, k)
-    result = fill(Array{Int32}(undef, k), num_ways_to_partition(n, k))
+    result = fill(Vector{Int32}(undef, k), num_ways_to_partition(n, k))
     idx = 1
     for b in 1:k
-        arr = vcat([n - b + 1], ones(Int32, b - 1))
+        arr = vcat([n - b + 1], ones(typeof(Int32), b - 1))
         result[idx] = arr
         idx += 1
 
@@ -73,8 +73,8 @@ function kick_block_down(arr)
     return false
 end
 
-n = 8
+n = 5
 k = 3
 
-println("Number of ways to partition $n items into $k boxes: $(num_ways_to_partition(8, 3))")
-println(generate_partitions(8, 3))
+println("Number of ways to partition $n items into $k boxes: $(num_ways_to_partition(n, k))")
+println(generate_partitions(n, k))
