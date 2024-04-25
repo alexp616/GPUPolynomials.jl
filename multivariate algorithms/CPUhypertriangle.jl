@@ -110,6 +110,8 @@ function generate_partitions(n, k)
     return partitions
 end
 
+generate_partitions(3,5)
+
 """
     generate_termPowers(p, m)
 

@@ -1,13 +1,8 @@
-function my_function(x, y=10)
-    if isa(y, Nothing)
-        println("Optional parameter not provided")
-        # Do something when y is not provided
-    else
-        println("Optional parameter provided: $y")
-        # Do something when y is provided
-    end
-    # Do something with x and y
-end
+using CUDA
+using BenchmarkTools
 
-my_function(5)    # Output: Optional parameter provided: 10
-my_function(5, 20)    # Output: Optional parameter provided: 20
+cuarr = CUDA.fill(2, 1000000)
+@btime cpuarr = Array(cuarr) # 2.515 ms (laptop not plugged in)
+
+cpuarr2 = [i for i in 1:1000000]
+@btime cuarr2 = CuArray(cpuarr2) # 1.664 ms (laptop not plugged in)
