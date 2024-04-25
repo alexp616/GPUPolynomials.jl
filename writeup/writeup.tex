@@ -17,6 +17,9 @@
 
 \maketitle
 
+\textbf{Everything before section 7 (hypertriangle) isn't useful for raising multivariate polynomials to powers.}
+
+This is because FFT in $k$-dimensions has a time complexity of $O(n^k \log{n})$. FFT in $1$ dimension is $O(n\log{n})$, and in $k$ dimensions, the $1$-D FFT needs to be repeated roughly $n^{k-1}$ times, making the total complexity $O(n^k \log{n})$. So, even with the number of applications FFT has, it isn't the best choice when raising higher-dimensional polynomials to powers.
 \section{Overview}
 Using the Fast Fourier Transform (FFT), we can multiply two univariate polynomials of in $O(n\log(n))$ time, compared to the trivial distributive algorithm of $O(n^2)$. In addition, this process is fully parallelizable, making its computation extremely quick using GPUs. In order to understand the algorithm, we need to understand a few steps:
 
@@ -321,36 +324,17 @@ Using stars and bars (distributing $n$ degrees amongst $k$ variables), we find t
 
 The intuitive way to apply this is to compute all of the coefficients, and given a multinomial, map every $n + k - 1 \choose k-1$ term to the coefficient in front of it, and add all of them up.
 
-There are a lot of optimizations and ways to speed this up in code that I propose.
+\textbf{Easy Multinomial Expansion Algorithm (our current one)}
 
-First of all, in the case of something like raising $(a+b+c)^5$, where $k=3$ and $n=5$, we expect $\binom{5 + 3 - 1}{3-1} = \binom{7}{2} = 21$ elements. However, the coefficient of $(0,0,5)$ is the same as the coefficient of $(5,0,0)$ and $(0,5,0)$. Listing out all of the possible combinations of degrees, we get 5 of them: $(0,0,5), (0,1,4), (0,2,3), (1,1,3), (1,2,2)$, a lot fewer than 21. There is no closed-form solution to count these (\href{https://en.wikipedia.org/wiki/Integer_partition}{Wikipedia}), but it is possible with recursion, and dynamic programming.
-
-Need to come up with a way in code to hash $(5,0,0),(0,5,0)$ to the binomial coefficient associated with $(5,0,0)$, and $(1,1,3)$ to the binomial coefficient associated with $(3,1,1)$.
-
-Also need a way to iterate through all possible combinations of degrees, with order not mattering.
-
-\textbf{Easy Multinomial Expansion Algorithm}
-
-Given a multinomial and a power: $(a_1 + a_2 + ... + a_k)^n$
+Given a multinomial and a power: $(a_1 + a_2 + ... + a_k)^n$, where $a_i$ represents a term $c_ix^py^qz^r...$
 
 \begin{enumerate}
-    \item Make an array [0!, 1!, 2!, ..., n!] $O(n)$
-    \item Iterate through all $\binom{n+k-1}{k-1}$ terms of the expansion, and compute their binomial coefficients with $\frac{n!}{d_0!d_1! ... d_k!}$
+    \item Generate all $\binom{n+k-1}{k-1}$ possible terms of the expansion, store into array termPowers. termPowers will be a 2d array , with elements looking like $(d_1, d_2, ... , d_k)$. Initialize result array with same length as termPowers.
+    \item Iterate through every index of termPowers. Compute the multinomial coefficient, which will be $\frac{n!}{d_1!d_2!...d_k!}$. Raise $c^d_i$ for each index $i$ in $(d_1, d_2, ... , d_k)$, and multiply $c$ by the multinomial coefficient. Also compute the resulting degrees of the variables, and send to result
     \item done
 \end{enumerate}
 
-\textbf{Theoretical Multinomial Expansion Algorithm}:
 
-Given a multinomial and a power: $(a_1 + a_2 + ... + a_k)^n$
-
-\begin{enumerate}
-    \item Compute all ways to distribute $n$ identical balls into $k$ identical bins: Write code that in the case of $(n,k)=(5,3)$ makes the exact array $A=[(0,0,5),(0,1,4),(0,2,3),(1,1,3),(1,2,2)]$. For a fixed $k$, this step grows asymptotically at $x=\frac{1}{4n\sqrt{3}}e^{\pi\sqrt{\frac{2n}{3}}}$ (\href{https://en.wikipedia.org/wiki/Integer_partition}{Wikipedia}) $O(x)$
-    \item Make an array [0!, 1!, 2!, ..., n!] $O(n)$
-    \item For every element of $A$, calculate the coefficient: $\frac{n!}{d_1!d_2!d_3!}$, and store into new array $B$. $O(x)$
-    \item For every term in the $\binom{n+k-1}{k-1}$ terms of the expansion, develop an algorithm that maps it to its corresponding coefficient in $B$ (to avoid searching and sorting). $O(\binom{n+k-1}{k-1})$
-\end{enumerate}
-
-I have no clue how to do steps 1 and 4 of the theoretical one
 
 \end{document}
 
