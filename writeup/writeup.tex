@@ -334,6 +334,12 @@ Given a multinomial and a power: $(a_1 + a_2 + ... + a_k)^n$, where $a_i$ repres
     \item done
 \end{enumerate}
 
+GPU memory required: 
+$4 (\binom{n + k - 1}{k - 1} * (k + 1 + numvars + 1)) + 4 (k * (numvars + 1))$ bytes \\\\
+$n$ is the degree we're raising to, $k$ is the number of starting terms.
+
+4 comes from integers being stored as Int32's, the binomial coefficient comes from the ending number of terms, $k$ comes from each $k$-integer composition, 1 comes from multinomial coefficients, and the other 1 comes from the ending coefficients.
+
 
 
 \end{document}

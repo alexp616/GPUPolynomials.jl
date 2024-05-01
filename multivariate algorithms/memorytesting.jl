@@ -2,7 +2,42 @@ using Test
 using BenchmarkTools
 using CUDA
 
-include("utils.jl")
+
+"""
+    compute_inverses_mod_m(m)
+
+Return array of multiplicative inverses of a mod m for 1 <= a < m
+
+After assigning the return array to arr, simply do arr[a] for the inverse of a mod m
+"""
+function compute_inverses_mod_m(m)
+    result = zeros(Int, m - 1)
+    for i in 1:m-1
+        if result[i] == 0
+            for j in 1:m-1
+                if (i * j) % m == 1
+                    result[i] = j
+                    result[j] = i
+                end
+            end
+        end
+    end
+    return result
+end
+@test compute_inverses_mod_m(7) == [1, 4, 5, 2, 3, 6]
+
+function compute_factorials_mod_m(m)
+    result = zeros(Int32, m)
+    result[1] = 1
+    prod = 1
+    for i in 2:m
+        prod *= i - 1
+        prod = prod % m
+        result[i] = prod
+    end
+    
+    return result
+end
 
 """
     get_num_variables(p)
@@ -29,39 +64,13 @@ function polynomial_to_arr(p)
     return result
 end
 
-
-
-"""
-    raise_to_mminus1_mod_m(p, m)
-
-Return p^(m-1) mod m
-"""
-function raise_to_mminus1_mod_m(p, m, pregen = nothing)
-    # termPowers is all possible combinations of powers of the terms of the polynomial
-    # if the polynomial has 3 terms to be raised to the 4th then termPowers contains
-    # [4, 0, 0], [0, 4, 0], [0, 0, 4], [3, 1, 0] ... etc
-    num_vars = get_num_variables(p)
-    num_terms = length(p)
-
-    if pregen === nothing
-        pregen = pregenerate(num_terms, m)
+function raise_n_to_p_mod_m(n, p, m)
+    result = 1
+    for i in 1:p
+        result *= n
+        result = result % m
     end
-
-    # pregen returns (cu_termPowers, multinomial_coeffs, num_of_ending_terms)
-    nthreads = min(512, size(pregen[1], 1))
-    nblocks = cld(size(pregen[1], 1), nthreads)
-
-    cu_p = CuArray(polynomial_to_arr(p))
-
-    result = CUDA.fill(zero(Int32), size(pregen[1], 1), 1 + num_vars)
-
-    CUDA.@sync @cuda(
-        threads = nthreads,
-        blocks = nblocks,
-        power_kernel!(cu_p, m, result, pregen[1], pregen[2], num_vars, num_terms)
-    )
-
-    return view(result, 1:pregen[3], :)
+    return Int32(result)
 end
 
 
@@ -154,49 +163,30 @@ function generate_multinomial_coeffs(cu_termPowers, multinomial_coeffs, num_term
     multinomial_coeffs[idx] = m - 1
 
     for j in 1:num_terms
-        multinomial_coeffs[idx] *= inverse[factorials[cu_termPowers[idx, j] + 1]]
+        multinomial_coeffs[idx] *= 1
         multinomial_coeffs[idx] = multinomial_coeffs[idx] % m
     end
 
     return
 end
 
-polynomial1 = [[2, [2, 3, 1, 2]],
-               [2, [1, 2, 3, 2]],
-               [3, [3, 2, 1, 2]],
-               [5, [1, 1, 4, 2]],
-               [4, [4, 1, 1, 2]], 
-               [2, [2, 3, 1, 2]],
-               [2, [1, 2, 3, 2]],
-               [3, [3, 2, 1, 2]],
-               [5, [1, 1, 4, 2]],
-               [4, [4, 1, 1, 2]], 
-               [2, [2, 3, 1, 2]],
-               [2, [1, 2, 3, 2]],
-               [3, [3, 2, 1, 2]],
-               [5, [1, 1, 4, 2]],
-               [4, [4, 1, 1, 2]], 
-               [2, [2, 3, 1, 2]],
-               [2, [1, 2, 3, 2]],
-               [3, [3, 2, 1, 2]],
-               [4, [4, 1, 1, 2]],]
-
-nterms = length(polynomial1)
-m = 5
+degree = 5
+terms = 20
 
 CUDA.memory_status()
-# println("Time to pre-generate compositions & coefficients:")
-pregen = pregenerate(nterms, m)
-# @btime pregenerate(nterms, m)
-
-mem = 4 * (binomial(m + nterms - 2, nterms - 1) * (nterms + 1))
-println("Expected memory gain: $mem bytes")
-
+println(binomial(degree + terms - 1, terms - 1))
+println("expected memory: $(4 * binomial(terms + degree - 1, terms - 1) * (terms + 1)) bytes")
+pregen = pregenerate(terms, degree + 1)
 CUDA.memory_status()
-# raise_to_mminus1_mod_m(polynomial1, m, pregen)
-
-# CUDA.memory_status()
-
-# mem = 4 * (binomial(m + nterms - 2, nterms - 1) * nterms + 2 + get_num_variables(polynomial1)) + 4 * (nterms * (get_num_variables(polynomial1)))
-# println("Expected memory gain: $mem bytes")
-# @btime raise_to_mminus1_mod_m(polynomial1, m, pregen)
+# for terms in 1:5
+#     for degree in 1:5
+#         println("memory after terms=$terms, degree=$degree ($(binomial(terms + degree - 1, terms - 1)) partitions of length $terms):")
+#         println("$(4 * binomial(terms + degree - 1, terms - 1) * (terms + 1))")
+#         println()
+#         pregen = pregenerate(terms, degree + 1)
+#         CUDA.memory_status()
+#         CUDA.unsafe_free!(pregen[1])
+#         CUDA.unsafe_free!(pregen[2])
+#         println()
+#     end
+# end
