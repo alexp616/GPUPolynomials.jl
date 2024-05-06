@@ -4,32 +4,6 @@ using CUDA
 
 include("utils.jl")
 
-"""
-    get_num_variables(p)
-
-Return number of variables in polynomial represented by p
-"""
-function get_num_variables(p)
-    return length(p[1][2])
-end
-
-"""
-    polynomial_to_arr(p)
-
-Convert p into 2d array
-"""
-function polynomial_to_arr(p)
-    num_cols = get_num_variables(p) + 1
-    result = zeros(Int, length(p), num_cols)
-    for i in eachindex(p)
-        result[i, 1] = p[i][1]
-        result[i, 2:num_cols] .= p[i][2]
-    end
-
-    return result
-end
-
-
 
 """
     raise_to_mminus1_mod_m(p, m)
@@ -61,6 +35,8 @@ function raise_to_mminus1_mod_m(p, m, pregen = nothing)
         power_kernel!(cu_p, m, result, pregen[1], pregen[2], num_vars, num_terms)
     )
 
+    # result = result[setdiff(1:end, (pregen[3]+1:end)), :]
+    # return result;
     return view(result, 1:pregen[3], :)
 end
 
@@ -82,37 +58,6 @@ function power_kernel!(cu_p, m, result, cu_termPowers, multinomial_coeffs, num_v
     end
 
     return
-end
-
-"""
-    generate_compositions(n, k)
-
-Return all possible ways to distribute n identical balls into k distinct boxes.
-
-No idea how to parallelize this, maybe dynamic parallelism?
-"""
-function generate_compositions(n, k)
-    compositions = zeros(Int32, binomial(n + k - 1, k - 1), k)
-    current_composition = zeros(Int32, k)
-    current_composition[1] = n
-    idx = 1
-    while true
-        compositions[idx, :] .= current_composition
-        idx += 1
-        v = current_composition[k]
-        if v == n
-            break
-        end
-        current_composition[k] = 0
-        j = k - 1
-        while 0 == current_composition[j]
-            j -= 1
-        end
-        current_composition[j] -= 1
-        current_composition[j + 1] = 1 + v
-    end
-
-    return compositions
 end
 
 
@@ -161,7 +106,11 @@ function generate_multinomial_coeffs(cu_termPowers, multinomial_coeffs, num_term
     return
 end
 
-polynomial1 = [[2, [2, 3, 1, 2]],
+function sort_by_col!(arr, col)
+    arr .= arr[sortperm(arr[:, col]), :]
+end
+
+polynomial = [[2, [2, 3, 1, 2]],
                [2, [1, 2, 3, 2]],
                [3, [3, 2, 1, 2]],
                [5, [1, 1, 4, 2]],
@@ -171,32 +120,38 @@ polynomial1 = [[2, [2, 3, 1, 2]],
                [3, [3, 2, 1, 2]],
                [5, [1, 1, 4, 2]],
                [4, [4, 1, 1, 2]], 
-               [2, [2, 3, 1, 2]],
-               [2, [1, 2, 3, 2]],
-               [3, [3, 2, 1, 2]],
-               [5, [1, 1, 4, 2]],
-               [4, [4, 1, 1, 2]], 
-               [2, [2, 3, 1, 2]],
-               [2, [1, 2, 3, 2]],
-               [3, [3, 2, 1, 2]],
-               [4, [4, 1, 1, 2]],]
+]
 
-nterms = length(polynomial1)
-m = 5
 
-CUDA.memory_status()
-# println("Time to pre-generate compositions & coefficients:")
-pregen = pregenerate(nterms, m)
-# @btime pregenerate(nterms, m)
+println("Time to pregen (10 terms, 10 degree)")
+pregen = pregenerate(10, 11)
+@btime pregenerate(10, 11)
 
-mem = 4 * (binomial(m + nterms - 2, nterms - 1) * (nterms + 1))
-println("Expected memory gain: $mem bytes")
+println("Time to compute power")
+result = raise_to_mminus1_mod_m(polynomial, 11, pregen)
+@btime raise_to_mminus1_mod_m(polynomial, 11, pregen)
 
-CUDA.memory_status()
-# raise_to_mminus1_mod_m(polynomial1, m, pregen)
+# println("Time to sort result")
+# @btime sort_by_col!(result)
 
-# CUDA.memory_status()
+# primes = [3, 5, 7, 11]
+# open("hypertrianglebenchmarks.txt", "w") do io
+#     redirect_stdout(io)
+#     for i in 1:19
+#         nterms = i
+#         polynomial1 = polynomial[1:nterms]
+#         for m in eachindex(primes)
+#             println("Time to pregen ($nterms terms, $(m-1) degree)")
+#             pregen = pregenerate(nterms, primes[m])
+#             @btime pregenerate(nterms, primes[m])
+    
+#             prineln("Time to compute power")
+#             @btime raise_to_mminus1_mod_m(polynomial1, primes[m], pregen)
+#             CUDA.memory_status()
+#             CUDA.reclaim()
+#         end
+#     end
+# end
 
-# mem = 4 * (binomial(m + nterms - 2, nterms - 1) * nterms + 2 + get_num_variables(polynomial1)) + 4 * (nterms * (get_num_variables(polynomial1)))
-# println("Expected memory gain: $mem bytes")
-# @btime raise_to_mminus1_mod_m(polynomial1, m, pregen)
+
+

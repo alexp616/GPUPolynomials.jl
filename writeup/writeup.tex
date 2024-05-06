@@ -330,9 +330,19 @@ Given a multinomial and a power: $(a_1 + a_2 + ... + a_k)^n$, where $a_i$ repres
 
 \begin{enumerate}
     \item Generate all $\binom{n+k-1}{k-1}$ possible terms of the expansion, store into array termPowers. termPowers will be a 2d array , with elements looking like $(d_1, d_2, ... , d_k)$. Initialize result array with same length as termPowers.
-    \item Iterate through every index of termPowers. Compute the multinomial coefficient, which will be $\frac{n!}{d_1!d_2!...d_k!}$. Raise $c^d_i$ for each index $i$ in $(d_1, d_2, ... , d_k)$, and multiply $c$ by the multinomial coefficient. Also compute the resulting degrees of the variables, and send to result
-    \item done
+    \item Encode all monomials of the multinomial. Use the base-number conversion method: if the resulting degree is 20, and the monomial is of form $c_ix^py^qz^r...$, then the encoded form is a tuple $(c_i, 20^0 * p + 20^1 * q + 20^2 * r)$. Note that this encoding is homomorphic: $(x^2yz)^5$ has resulting degree $20$, so encode it as $800 + 20 + 1 = 821$. $821*5 = 4105 = 10 * 400 + 5 * 20 + 5 \rightarrow x^{10}y^5z^5$
+    \item Iterate through every index of termPowers. Compute the multinomial coefficient, which will be $\frac{n!}{d_1!d_2!...d_k!}$. Raise $c^d_i$ for each index $i$ in $(d_1, d_2, ... , d_k)$, and multiply $c$ by the multinomial coefficient. Also compute the resulting degrees of the variables, and send to result.
+    \item Sort result by the encoded monomials.
+    \item reduce the result by key, where the keys are the encoded monomials ?????????
+    \item decode all monomials
+    \item return result
 \end{enumerate}
+
+
+
+
+
+
 
 GPU memory required: 
 $4 (\binom{n + k - 1}{k - 1} * (k + 1 + numvars + 1)) + 4 (k * (numvars + 1))$ bytes \\\\

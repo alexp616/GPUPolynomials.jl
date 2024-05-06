@@ -61,3 +61,60 @@ function raise_n_to_p_mod_m(n, p, m)
     end
     return Int32(result)
 end
+
+"""
+    get_num_variables(p)
+
+Return number of variables in polynomial represented by p
+"""
+function get_num_variables(p)
+    return length(p[1][2])
+end
+
+"""
+    polynomial_to_arr(p)
+
+Convert p into array 
+"""
+function polynomial_to_arr(p)
+    num_cols = get_num_variables(p) + 1
+
+    result = zeros(Int, length(p), num_cols)
+    for i in eachindex(p)
+        result[i, 1] = p[i][1]
+        result[i, 2:num_cols] .= p[i][2]
+    end
+
+    return result
+end
+
+"""
+    generate_compositions(n, k)
+
+Return all possible ways to distribute n identical balls into k distinct boxes.
+
+No idea how to parallelize this, maybe dynamic parallelism?
+"""
+function generate_compositions(n, k)
+    compositions = zeros(Int32, binomial(n + k - 1, k - 1), k)
+    current_composition = zeros(Int32, k)
+    current_composition[1] = n
+    idx = 1
+    while true
+        compositions[idx, :] .= current_composition
+        idx += 1
+        v = current_composition[k]
+        if v == n
+            break
+        end
+        current_composition[k] = 0
+        j = k - 1
+        while 0 == current_composition[j]
+            j -= 1
+        end
+        current_composition[j] -= 1
+        current_composition[j + 1] = 1 + v
+    end
+
+    return compositions
+end
