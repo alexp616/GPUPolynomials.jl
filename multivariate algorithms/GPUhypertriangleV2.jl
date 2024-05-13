@@ -6,7 +6,7 @@ include("utilsV2.jl")
 
 
 """
-    raise_to_m(p, m, pregen = nothing)
+    raise_to_n(p, m, pregen = nothing)
 
 Return p^m, where p is a polynomial and m is an integer power. Will probably overflow when m gets big.
 
@@ -133,11 +133,16 @@ function raise_to_n_mod_m(p, n, m, pregen = nothing)
     end
 end
 
+"""
+    pregenerate_to_n_mod_m(num_terms, n, m)
+
+
+"""
 function pregenerate_to_n_mod_m(num_terms, n, m)
-
+    factorials = CuArray(generate_n_factorials_mod_m)
+    # Wouldn't most of these not be invertible mod m? So then how would division work?
+    inverse = nothing
 end
-
-
 
 
 polynomial = [ 
@@ -153,13 +158,13 @@ polynomial = [
     4 1 0 1 2
 ]
 
-println("Time to pregen (10 terms, 10 degree)")
-pregen = pregenerate_mod_m(10, 11)
-@btime pregenerate_mod_m(10, 11)
+# println("Time to pregen (10 terms, 10 degree)")
+# pregen = pregenerate_mod_m(10, 11)
+# @btime pregenerate_mod_m(10, 11)
 
-println("Time to compute power")
-result = raise_to_mminus1_mod_m(polynomial, 11, pregen)
-@btime raise_to_mminus1_mod_m(polynomial, 11, pregen)
+# println("Time to compute power")
+# result = raise_to_mminus1_mod_m(polynomial, 11, pregen)
+# @btime raise_to_mminus1_mod_m(polynomial, 11, pregen)
 
 
 

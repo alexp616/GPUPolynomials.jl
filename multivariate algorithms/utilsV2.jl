@@ -60,6 +60,7 @@ function pregenerate(num_terms, n)
     nthreads = min(512, size(termPowers, 1))
     nblocks = cld(size(termPowers, 1), nthreads)
 
+    # Pad to multiple of nthreads if needed
     num_paddedrows = cld(size(termPowers, 1), nthreads) * nthreads - size(termPowers, 1)
     cu_termPowers = CuArray(vcat(termPowers, fill(zero(Int32), (num_paddedrows, size(termPowers, 2)))))
 
@@ -71,7 +72,7 @@ function pregenerate(num_terms, n)
         generate_multinomial_coeffs!(cu_termPowers, cu_multinomial_coeffs, n, num_terms, factorials)
     )
 
-    return (cu_termPowers, multinomial_coeffs, size(termPowers, 1))
+    return (cu_termPowers, cu_multinomial_coeffs, size(termPowers, 1))
 end
 
 """

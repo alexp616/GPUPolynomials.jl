@@ -343,12 +343,38 @@ Given a multinomial and a power: $(a_1 + a_2 + ... + a_k)^n$, where $a_i$ repres
 
 
 
+\textit{Theorem}: Let $g$ be a multinomial of $k$ terms, where $k \ge p$, and degree $k$. If $maxCoef(g) \le M$, then $maxCoef(g^p) \le p! M^p,$ where \textbf{$g^p$ is unreduced}
 
-GPU memory required: 
-$4 (\binom{n + k - 1}{k - 1} * (k + 1 + numvars + 1)) + 4 (k * (numvars + 1))$ bytes \\\\
-$n$ is the degree we're raising to, $k$ is the number of starting terms.
+\textit{Proof}: The multinomial coefficient of each resulting term is computed by $\frac{p!}{d_{1}!...d_{p}!}$. With the initial condition that the number of terms is greater than $p$, this tells us that the maximum multinomial coefficient is $\frac{p!}{1!...1!} = p!$. The maximum coefficient is $M^p$, which happens when there are at least $p$ starting terms of coefficient $M$. Multiplying these together, we get that the maximum coefficient of $g^p$ is bounded above by $p! M^p$
 
-4 comes from integers being stored as Int32's, the binomial coefficient comes from the ending number of terms, $k$ comes from each $k$-integer composition, 1 comes from multinomial coefficients, and the other 1 comes from the ending coefficients.
+The theorem above is kind of useless. It doesn't consider what happens when like terms are combined.
+
+\textit{Conjecture}: Let $g$ be a polynomial of $k$ variables and homogeneous $k$ degree. Let $maxCoef(g) < M$. Then, $maxCoef(g^p)$ is bounded by $M^p$ times the corresponding entry in \href{https://oeis.org/A333901/internal}{OEIS A333901} (genuinely wtf? where do primes even come in here?), where $n$ is $p$ and $k$ is $k$. The matrix is symmetric.
+
+\textit{reason for conjecture}: Bunch of empirical data generated with multivariate algorithms/testing.jl
+
+conclusion: chinese remainder theorem looks very necessary, those numbers get big fast
+
+\textit{Conjecture}: If $g$'s terms are all possible monomials of $k$ variables and degree $k$, then $g^p$'s terms will be all possible monomials of $k$ variables and degree $pk$.
+
+\textit{reason for conjecture}: I don't actually know if it's true, but all monomials I thought of could be represented
+
+Benchmarking some cases of interest:
+Let $g$ be a polynomial of $k$ variables and homogeneous $k$ degree that we want to raise to the $p$.
+
+The maximum \# of starting terms is given by $\binom{2k-1}{k}$. This comes from stars and bars with $k$ stars and $k$ bars.
+
+The maximum \# of ending, unreduced terms is given by $\binom{p + \binom{2k-1}{k} - 1}{p}$
+
+The maximum \# of ending, reduced terms is given by $\binom{pk + k - 1}{k - 1}$
+
+What we are really interested in is what happens when we raise a polynomial to the $p-1$ mod p and then to the $p$.
+
+If we start with $k = 4$ and $p = 5$, then the maximum coefficient of $g^{p-1}$ is $p - 1 = 4$ because we're working in $\mathbb{F}_p$. $g^p$ has a maximum of $969$ reduced terms $(\binom{16+4-1}{3})$. All of the monomials are of degree $16$
+
+Then, raising a polynomial of $969$ terms to the $5$ results in $37115800155$ resulting unreduced terms, which is out of the scope of our cpu algorithm for generating compositions. Reducing, we get $91881$ terms.
+
+The OEIS thing isn't enough, need another formula that takes numVars, degree, and power to compute the maximum coefficient.
 
 
 
