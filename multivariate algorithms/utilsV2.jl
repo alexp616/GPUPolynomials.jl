@@ -50,42 +50,42 @@ METHODS FOR polynomial ^ n
     pregenerate(num_terms, n)
 
 Return tuple of all pre-computed information to avoid recomputation.
-(cu_termPowers, multinomial, num_of_ending_terms)
+(cu_weakIntegerCompositions, multinomial, num_of_ending_terms)
 """
 function pregenerate(num_terms, n)
     factorials = CuArray(generate_factorials(n))
     
-    termPowers = generate_compositions(n, num_terms)
+    weakIntegerCompositions = generate_compositions(n, num_terms)
 
-    nthreads = min(512, size(termPowers, 1))
-    nblocks = cld(size(termPowers, 1), nthreads)
+    nthreads = min(512, size(weakIntegerCompositions, 1))
+    nblocks = cld(size(weakIntegerCompositions, 1), nthreads)
 
     # Pad to multiple of nthreads if needed
-    num_paddedrows = cld(size(termPowers, 1), nthreads) * nthreads - size(termPowers, 1)
-    cu_termPowers = CuArray(vcat(termPowers, fill(zero(Int32), (num_paddedrows, size(termPowers, 2)))))
+    num_paddedrows = cld(size(weakIntegerCompositions, 1), nthreads) * nthreads - size(weakIntegerCompositions, 1)
+    cu_weakIntegerCompositions = CuArray(vcat(weakIntegerCompositions, fill(zero(Int32), (num_paddedrows, size(weakIntegerCompositions, 2)))))
 
-    cu_multinomial_coeffs = CUDA.fill(zero(Int64), size(cu_termPowers, 1))
+    cu_multinomial_coeffs = CUDA.fill(zero(Int64), size(cu_weakIntegerCompositions, 1))
 
     CUDA.@sync @cuda(
         threads = nthreads,
         blocks = nblocks,
-        generate_multinomial_coeffs!(cu_termPowers, cu_multinomial_coeffs, n, num_terms, factorials)
+        generate_multinomial_coeffs!(cu_weakIntegerCompositions, cu_multinomial_coeffs, n, num_terms, factorials)
     )
 
-    return (cu_termPowers, cu_multinomial_coeffs, size(termPowers, 1))
+    return (cu_weakIntegerCompositions, cu_multinomial_coeffs, size(weakIntegerCompositions, 1))
 end
 
 """
-    generate_multinomial_coeffs(cu_termPowers, cu_multinomial_coeffs, n, num_terms, factorials)
+    generate_multinomial_coeffs(cu_weakIntegerCompositions, cu_multinomial_coeffs, n, num_terms, factorials)
 
 Kernel function to put all multinomial coefficients in multinomial_coeffs
 """
-function generate_multinomial_coeffs!(cu_termPowers, cu_multinomial_coeffs, n, num_terms, factorials)
+function generate_multinomial_coeffs!(cu_weakIntegerCompositions, cu_multinomial_coeffs, n, num_terms, factorials)
     idx = threadIdx().x + (blockIdx().x - 1) * blockDim().x
     cu_multinomial_coeffs[idx] = factorials[n + 1]
 
     for j in 1:num_terms
-        cu_multinomial_coeffs[idx] /= factorials[cu_termPowers[idx, j] + 1]
+        cu_multinomial_coeffs[idx] /= factorials[cu_weakIntegerCompositions[idx, j] + 1]
     end
 
     return
@@ -187,31 +187,31 @@ end
 function pregenerate_mod_m(num_terms, m)
     factorials = CuArray(generate_factorials_mod_m(m))
     inverse = CuArray(generate_inverses_mod_m(m))
-    termPowers = generate_compositions(m - 1, num_terms)
+    weakIntegerCompositions = generate_compositions(m - 1, num_terms)
 
-    nthreads = min(512, size(termPowers, 1))
-    nblocks = cld(size(termPowers, 1), nthreads)
+    nthreads = min(512, size(weakIntegerCompositions, 1))
+    nblocks = cld(size(weakIntegerCompositions, 1), nthreads)
 
-    num_paddedrows = cld(size(termPowers, 1), nthreads) * nthreads - size(termPowers, 1)
-    cu_termPowers = CuArray(vcat(termPowers, fill(zero(Int32), (num_paddedrows, size(termPowers, 2)))))
+    num_paddedrows = cld(size(weakIntegerCompositions, 1), nthreads) * nthreads - size(weakIntegerCompositions, 1)
+    cu_weakIntegerCompositions = CuArray(vcat(weakIntegerCompositions, fill(zero(Int32), (num_paddedrows, size(weakIntegerCompositions, 2)))))
 
-    multinomial_coeffs = CUDA.fill(zero(Int32), size(cu_termPowers, 1))
+    multinomial_coeffs = CUDA.fill(zero(Int32), size(cu_weakIntegerCompositions, 1))
 
     CUDA.@sync @cuda(
         threads = nthreads,
         blocks = nblocks,
-        generate_multinomial_coeffs_mod_m(cu_termPowers, multinomial_coeffs, num_terms, m, factorials, inverse)
+        generate_multinomial_coeffs_mod_m(cu_weakIntegerCompositions, multinomial_coeffs, num_terms, m, factorials, inverse)
     )
 
-    return (cu_termPowers, multinomial_coeffs, size(termPowers, 1))
+    return (cu_weakIntegerCompositions, multinomial_coeffs, size(weakIntegerCompositions, 1))
 end
 
-function generate_multinomial_coeffs_mod_m(cu_termPowers, multinomial_coeffs, num_terms, m, factorials, inverse)
+function generate_multinomial_coeffs_mod_m(cu_weakIntegerCompositions, multinomial_coeffs, num_terms, m, factorials, inverse)
     idx = threadIdx().x + (blockIdx().x - 1) * blockDim().x
     multinomial_coeffs[idx] = m - 1
 
     for j in 1:num_terms
-        multinomial_coeffs[idx] *= inverse[factorials[cu_termPowers[idx, j] + 1]]
+        multinomial_coeffs[idx] *= inverse[factorials[cu_weakIntegerCompositions[idx, j] + 1]]
         multinomial_coeffs[idx] = multinomial_coeffs[idx] % m
     end
 

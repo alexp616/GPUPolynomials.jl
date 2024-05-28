@@ -1,7 +1,11 @@
 using CUDA
 using BenchmarkTools
-array = CuArray([1, 0, 0, 0, 1, 0, 1, 1])
 
-sus = accumulate(+, array)
-println(sus)
-println(array)
+array = rand(Int32, 10000000, 2)
+cu_array = CuArray(array)
+
+function sort_by_col!(arr, col)
+    arr .= arr[sortperm(arr[:, col]), :]
+end
+
+@btime sort_by_col!(cu_array, 1)

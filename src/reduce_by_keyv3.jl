@@ -1,40 +1,5 @@
 using CUDA
 
-# Segmented_scan that doesn't assume length(data) and length(flags) are a power of 2 plus 1
-# function segmented_scan(data, flags)
-#     @assert length(data) == length(flags) "data and flags not same length"
-
-#     cu_data = CuArray(pad_to_next_power_of_2(data))
-#     cu_flags_original = CuArray(pad_to_next_power_of_2(flags))
-#     cu_flags_tmp = copy(cu_flags_original)
-#     n = length(cu_data)
-#     log2n = Int(floor(log2(n)))
-    
-#     # Launch configuration
-#     threads_per_block = min(length(cu_data), 256)
-#     blocks = cld(n, threads_per_block)
-
-#     for d in 0:(log2n - 1)
-#         CUDA.@sync @cuda threads = div(threads_per_block, 2^(d+1)) blocks = blocks segmented_scan_upsweep_kernel(cu_data, cu_flags_tmp, d)
-#     end
-
-#     CUDA.@sync @cuda threads = 1 blocks = 1 set_value(cu_data, n, 0)
-
-#     @assert Array(cu_flags_original) != Array(cu_flags_tmp) "tmp array never changed, no flags present"
-
-#     for d in (log2n - 1):-1:0
-#         CUDA.@sync @cuda threads = div(threads_per_block, 2^(d+1)) blocks = blocks segmented_scan_downsweep_kernel(cu_data, cu_flags_original, cu_flags_tmp, d)
-#     end
-
-#     cu_copy_data = CuArray(data)
-#     cu_data .+= cu_copy_data
-
-#     CUDA.unsafe_free!(cu_copy_data)
-#     CUDA.unsafe_free!(cu_flags_original)
-#     CUDA.unsafe_free!(cu_flags_tmp)
-#     return cu_data
-# end
-
 # Returns padded array to next power of 2
 function pad_to_next_power_of_2_plus_1(arr::Vector{T}) where T
     current_length = length(arr)
@@ -52,9 +17,10 @@ function segmented_scan_upsweep_kernel(data, flags_tmp, d)
     if flags_tmp[k + 2^(d + 1)] == 0
         data[k + 2^(d + 1)] = data[k + 2^(d)] + data[k + 2^(d + 1)]
     end
+
     flags_tmp[k + 2^(d + 1)] = flags_tmp[k + 2^d] | flags_tmp[k + 2^(d + 1)]
 
-    return
+    return nothing
 end
 
 function segmented_scan_downsweep_kernel(data, flags_original, flags_tmp, d)
@@ -80,10 +46,6 @@ function set_value(arr, idx, num)
     arr[idx] = num
     return
 end
-
-
-
-
 
 function generate_start_flags_kernel(keys, flags)
     tid = threadIdx().x + (blockIdx().x - 1) * blockDim().x
@@ -127,12 +89,11 @@ function reduce_by_key(keys, values)
         reduce_by_key_kernel(flags, key_indices, cu_keys, reduced_keys, reduced_values, cu_seg_reduced)
     )
 
-    return (reduced_keys, reduced_values)
+    return Array(reduced_keys[1:end-1]), Array(reduced_values[1:end-1])
 end
 
 function reduce_by_key_kernel(flags, key_indices, cu_keys, reduced_keys, reduced_values, cu_seg_reduced)
     tid = threadIdx().x + (blockIdx().x - 1) * blockDim().x
-
     if flags[tid + 1] != 0
         reduced_keys[key_indices[tid]] = cu_keys[tid]
         reduced_values[key_indices[tid]] = cu_seg_reduced[tid]
@@ -147,18 +108,31 @@ function segmented_scan(cu_data, cu_flags_original)
     cu_flags_tmp = copy(cu_flags_original)
     n = length(cu_data) - 1
     log2n = Int(floor(log2(n)))
-    
-    threads_per_block = min(length(cu_data) - 1, 512)
-    blocks = cld(n, threads_per_block)
 
     for d in 0:(log2n - 1)
-        CUDA.@sync @cuda threads = div(threads_per_block, 2^(d+1)) blocks = blocks segmented_scan_upsweep_kernel(cu_data, cu_flags_tmp, d)
+        total_threads = div(length(cu_data), 2^(d + 1))
+        nthreads = min(total_threads, 512)
+        nblocks = cld(total_threads, nthreads)
+
+        CUDA.@sync @cuda(
+            threads = nthreads,
+            blocks = nblocks,
+            segmented_scan_upsweep_kernel(cu_data, cu_flags_tmp, d)
+        )
     end
 
     CUDA.@sync @cuda threads = 1 blocks = 1 set_value(cu_data, n, 0)
 
     for d in (log2n - 1):-1:0
-        CUDA.@sync @cuda threads = div(threads_per_block, 2^(d+1)) blocks = blocks segmented_scan_downsweep_kernel(cu_data, cu_flags_original, cu_flags_tmp, d)
+        total_threads = div(length(cu_data), 2^(d + 1))
+        nthreads = min(total_threads, 512)
+        nblocks = cld(total_threads, nthreads)
+
+        CUDA.@sync @cuda(
+            threads = nthreads,
+            blocks = nblocks,
+            segmented_scan_downsweep_kernel(cu_data, cu_flags_original, cu_flags_tmp, d)
+        )
     end
 
     cu_data .+= copy_original_data
@@ -168,13 +142,14 @@ function segmented_scan(cu_data, cu_flags_original)
     return cu_data
 end
 
-keys = [3, 3, 3, 4, 4, 5, 5, 5, 5, 6, 7, 8, 9]
-values = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
 
-result = reduce_by_key(keys, values)
 
-println(result[1])
-println(result[2])
-# println(result)
+function sort_keys_with_values(keys, values)
+    perm = sortperm(keys)
 
+    sorted_keys = keys[perm]
+    sorted_values = values[perm]
+
+    return sorted_keys, sorted_values
+end
 
