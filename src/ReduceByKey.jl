@@ -151,3 +151,28 @@ function sort_keys_with_values(keys, values)
     return sorted_keys, sorted_values
 end
 
+
+#just threw this in here to avoid adding another import
+function generate_compositions(n, k, type::DataType = Int32)
+    compositions = zeros(type, binomial(n + k - 1, k - 1), k)
+    current_composition = zeros(type, k)
+    current_composition[1] = n
+    idx = 1
+    while true
+        compositions[idx, :] .= current_composition
+        idx += 1
+        v = current_composition[k]
+        if v == n
+            break
+        end
+        current_composition[k] = 0
+        j = k - 1
+        while 0 == current_composition[j]
+            j -= 1
+        end
+        current_composition[j] -= 1
+        current_composition[j + 1] = 1 + v
+    end
+
+    return compositions
+end

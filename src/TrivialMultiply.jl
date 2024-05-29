@@ -1,7 +1,6 @@
 using CUDA
 include("ReduceByKey.jl")
 include("PolynomialModule.jl")
-include("../bunch of random files/utilsV2.jl")
 
 using BenchmarkTools
 
@@ -130,7 +129,7 @@ end
 
 # EXAMPLE USAGE
 
-
+# Corresponds to x^4 + y^4 + z^4 + w^4
 coeffs = [1, 1, 1, 1]
 degrees = [
     1 0 0 0
@@ -139,7 +138,7 @@ degrees = [
     0 0 0 1
 ]
 
-# Corresponds to x^4 + y^4 + z^4 + w^4
+# Construct Polynomial object
 polynomial = HostPolynomial(coeffs, degrees)
 
 # Raise to the 4th power mod 5
@@ -149,10 +148,11 @@ polynomial2 = raise_to_power(polynomial, 4, 5)
 polynomial3 = raise_to_power(polynomial2, 5)
 
 
-
-
-
-
+# Corresponds to sum of all possible homogeneous terms of degree 4 and 4 variables
+degrees = generate_compositions(4, 4)
+coeffs = [1 for _ in 1:size(degrees, 1)]
+# degrees = [4 0 0 0; 3 1 0 0; 3 0 1 0; 3 0 0 1; 2 2 0 0; 2 1 1 0; 2 1 0 1; 2 0 2 0; 2 0 1 1; 2 0 0 2; 1 3 0 0; 1 2 1 0; 1 2 0 1; 1 1 2 0; 1 1 1 1; 1 1 0 2; 1 0 3 0; 1 0 2 1; 1 0 1 2; 1 0 0 3; 0 4 0 0; 0 3 1 0; 0 3 0 1; 0 2 2 0; 0 2 1 1; 0 2 0 2; 0 1 3 0; 0 1 2 1; 0 1 1 2; 0 1 0 3; 0 0 4 0; 0 0 3 1; 0 0 2 2; 0 0 1 3; 0 0 0 4]
+# coeffs = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
 
 
 
