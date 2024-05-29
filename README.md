@@ -1,3 +1,3 @@
-# Polynomial-Multiplication-w-FFT
+# BreadcrumbsGPU-Parallelized-Polynomial-Multiplication-in-Julia
 
-To become library for multiplying and exponentiating multivariate polynomials mod p using GPU-parallelized NTT
+To become a library for multiplying and exponentiating multivariate polynomials.
