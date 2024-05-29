@@ -89,7 +89,7 @@ function reduce_by_key(keys::Array{T}, values::Array{V}) where {T, V<:Integer}
         reduce_by_key_kernel(flags, key_indices, cu_keys, reduced_keys, reduced_values, cu_seg_reduced)
     )
 
-    return Array(reduced_keys[1:end-1]), Array(reduced_values[1:end-1])
+    return reduced_keys[1:end-1], reduced_values[1:end-1]
 end
 
 function reduce_by_key_kernel(flags, key_indices, cu_keys, reduced_keys, reduced_values, cu_seg_reduced)
