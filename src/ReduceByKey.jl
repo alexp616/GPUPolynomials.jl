@@ -57,7 +57,7 @@ function generate_start_flags_kernel(keys, flags)
     return nothing
 end
 
-function reduce_by_key(keys, values)
+function reduce_by_key(keys::Array{T}, values::Array{V}) where {T, V<:Integer}
     @assert length(keys) == length(values) "Keys and values cannot be different lengths"
     cu_keys = CuArray(pad_to_next_power_of_2_plus_1(keys))
     cu_values = CuArray(pad_to_next_power_of_2_plus_1(values))
@@ -80,8 +80,8 @@ function reduce_by_key(keys, values)
 
     cu_seg_reduced = segmented_scan(cu_values, flags)
 
-    reduced_keys = CUDA.fill(0, length_of_reduced_keys)
-    reduced_values = CUDA.fill(0, length_of_reduced_keys)
+    reduced_keys = CUDA.zeros(T, length_of_reduced_keys)
+    reduced_values = CUDA.zeros(V, length_of_reduced_keys)
     
     CUDA.@sync @cuda(
         threads = nthreads,
@@ -142,10 +142,8 @@ function segmented_scan(cu_data, cu_flags_original)
     return cu_data
 end
 
-
-
 function sort_keys_with_values(keys, values)
-    perm = sortperm(keys)
+    perm = sortperm(keys, rev = true)
 
     sorted_keys = keys[perm]
     sorted_values = values[perm]
