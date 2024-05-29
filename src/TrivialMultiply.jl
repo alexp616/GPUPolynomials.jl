@@ -126,17 +126,50 @@ function to_bits(n)
     return bits
 end
 
-# coeffs = [1, 1, 1, 1, 1]
-# degrees = [
-#     4 0 0 0
-#     3 1 0 0
-#     1 0 1 2
-#     0 0 3 1
-#     0 4 0 0
-# ]
+
+
+# EXAMPLE USAGE
+
+
+coeffs = [1, 1, 1, 1]
+degrees = [
+    1 0 0 0
+    0 1 0 0
+    0 0 1 0
+    0 0 0 1
+]
+
+# Corresponds to x^4 + y^4 + z^4 + w^4
+polynomial = HostPolynomial(coeffs, degrees)
+
+# Raise to the 4th power mod 5
+polynomial2 = raise_to_power(polynomial, 4, 5)
+
+# Raise to the 5th power
+polynomial3 = raise_to_power(polynomial2, 5)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Experimental stuff
+
+
+# degrees = generate_compositions(4, 4)
+# coeffs = [1 for _ in 1:size(degrees, 1)]
 
 # polynomial = PolynomialModule.HostPolynomial(coeffs, degrees)
-# polynomial2 = raise_to_power(polynomial, 5)
+# polynomial2 = raise_to_power(polynomial, 4, 5)
+# @benchmark raise_to_power(polynomial2, 5)
 
 # @btime raise_to_power(polynomial, 6)
 
@@ -149,30 +182,32 @@ end
 
 # @benchmark raise_to_power(polynomial, 20)
 
-function delta1(polynomial::PolynomialModule.HostPolynomial{T}, prime) where {T<:Integer}
-    g = raise_to_power(polynomial, prime - 1, prime)
+# function delta1(polynomial::PolynomialModule.HostPolynomial{T}, prime) where {T<:Integer}
+#     g = raise_to_power(polynomial, prime - 1, prime)
 
-    gp = raise_to_power(g, prime)
+#     gp = raise_to_power(g, prime)
 
-    is_any_negative = any(x -> x < 0, gp.coeffs)
-    @assert(is_any_negative == false)
+#     is_any_negative = any(x -> x < 0, gp.coeffs)
+#     @assert(is_any_negative == false)
 
-    return gp
-end
+#     return gp
+# end
 
-function test_for_negative()
-    degrees = generate_compositions(4, 4, Int64)
-    coeffs = [1 for _ in 1:size(degrees, 1)]
+# function test_for_negative()
+#     degrees = generate_compositions(4, 4, Int64)
+#     coeffs = [1 for _ in 1:size(degrees, 1)]
 
-    polynomial = PolynomialModule.HostPolynomial(coeffs, degrees)
+#     polynomial = PolynomialModule.HostPolynomial(coeffs, degrees)
 
-    g = raise_to_power(polynomial, 4)
-    g.coeffs = fill(4, length(coeffs))
+#     g = raise_to_power(polynomial, 4)
+#     g.coeffs = fill(4, length(coeffs))
 
-    gp = raise_to_power(g, 5)
-    is_any_negative = any(x -> x < 0, gp.coeffs)
-    @assert(is_any_negative == false)
-    println("chilling")
-end
+#     gp = raise_to_power(g, 5)
+#     is_any_negative = any(x -> x < 0, gp.coeffs)
+#     @assert(is_any_negative == false)
+#     println("chilling")
+# end
 
-test_for_negative()
+# test_for_negative()
+
+# @benchmark raise_to_power(polynomial, 5)

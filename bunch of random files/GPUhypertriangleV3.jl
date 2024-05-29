@@ -68,7 +68,6 @@ function raise_to_power(polynomial::HostPolynomial{T}, power, pregen = nothing) 
         pregen = pregenerate(polynomial.numTerms, power)
     end
 
-    
 end
 
 function pregenerate(numTerms, power)
