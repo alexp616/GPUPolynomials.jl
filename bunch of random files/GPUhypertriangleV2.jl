@@ -156,15 +156,40 @@ polynomial = [
     3 2 2 0 0
     1 1 1 2 0
     4 1 0 1 2
+    1 1 1 1 1
+    2 4 0 0 0
+    3 2 2 0 0
+    1 1 1 2 0
+    4 1 0 1 2
+    1 1 1 1 1
+    2 4 0 0 0
+    3 2 2 0 0
+    1 1 1 2 0
+    4 1 0 1 2
+    1 1 1 1 1
+    2 4 0 0 0
+    3 2 2 0 0
+    1 1 1 2 0
+    4 1 0 1 2
+    1 1 1 1 1
+    2 4 0 0 0
+    3 2 2 0 0
+    1 1 1 2 0
+    4 1 0 1 2
+    1 1 1 1 1
+    2 4 0 0 0
+    3 2 2 0 0
+    1 1 1 2 0
+    4 1 0 1 2
 ]
 
-# println("Time to pregen (10 terms, 10 degree)")
-# pregen = pregenerate_mod_m(10, 11)
-# @btime pregenerate_mod_m(10, 11)
+println("Time to pregen (35 terms, 4 degree)")
+pregen = pregenerate_mod_m(35, 5)
+@btime pregenerate_mod_m(35, 5)
 
-# println("Time to compute power")
-# result = raise_to_mminus1_mod_m(polynomial, 11, pregen)
-# @btime raise_to_mminus1_mod_m(polynomial, 11, pregen)
+println("Time to compute power")
+result = raise_to_mminus1_mod_m(polynomial, 5, pregen)
+@btime raise_to_mminus1_mod_m(polynomial, 5, pregen)
 
 
 

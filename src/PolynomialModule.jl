@@ -63,6 +63,7 @@ function decode_degrees_kernel!(cu_degrees, maxResultingDegree, result, numVars)
         val -= x * maxResultingDegree ^ (i - 1)
     end
 
+    # @cuassert val = 0
     return nothing
 end
 
@@ -81,7 +82,7 @@ mutable struct EncodedHostPolynomial{T}
     numTerms::Int
 end
 
-function HostPolynomial(coeffs::Array{T, 1}, degrees::Array{U}, maxResultingDegree = 1000) where {T, U<:Integer}
+function HostPolynomial(coeffs::Array{T, 1}, degrees::Array{U}, maxResultingDegree = 100) where {T, U<:Integer}
     if !(length(size(degrees)) != 1 || length(size(degrees)) != 2)
         throw(ArgumentError("Degrees array must have dimension 1 or 2"))
     end

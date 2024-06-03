@@ -138,19 +138,23 @@ degrees = [
     0 0 0 1
 ]
 
-# Construct Polynomial object
-polynomial = HostPolynomial(coeffs, degrees)
-
-# Raise to the 4th power mod 5
-polynomial2 = raise_to_power(polynomial, 4, 5)
-
-# Raise to the 5th power
-polynomial3 = raise_to_power(polynomial2, 5)
-
-
-# Corresponds to sum of all possible homogeneous terms of degree 4 and 4 variables
+# degrees = generate_compositions(4, 4)
 degrees = generate_compositions(4, 4)
 coeffs = [1 for _ in 1:size(degrees, 1)]
+
+polynomial = PolynomialModule.HostPolynomial(coeffs, degrees, 81)
+
+println("raising to the 4th power:")
+polynomial2 = raise_to_power(polynomial, 4, 5)
+@btime raise_to_power(polynomial, 4, 5)
+println("number of terms: $(polynomial2.numTerms)")
+
+println("raising $(polynomial2.numTerms) terms to the 5th power:")
+# polynomial3 = raise_to_power(polynomial2, 5)
+CUDA.@profile raise_to_power(polynomial2, 5)
+# println("Resulting polynomial has $(polynomial3.numTerms) terms")
+
+# Corresponds to sum of all possible homogeneous terms of degree 4 and 4 variables
 # degrees = [4 0 0 0; 3 1 0 0; 3 0 1 0; 3 0 0 1; 2 2 0 0; 2 1 1 0; 2 1 0 1; 2 0 2 0; 2 0 1 1; 2 0 0 2; 1 3 0 0; 1 2 1 0; 1 2 0 1; 1 1 2 0; 1 1 1 1; 1 1 0 2; 1 0 3 0; 1 0 2 1; 1 0 1 2; 1 0 0 3; 0 4 0 0; 0 3 1 0; 0 3 0 1; 0 2 2 0; 0 2 1 1; 0 2 0 2; 0 1 3 0; 0 1 2 1; 0 1 1 2; 0 1 0 3; 0 0 4 0; 0 0 3 1; 0 0 2 2; 0 0 1 3; 0 0 0 4]
 # coeffs = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
 

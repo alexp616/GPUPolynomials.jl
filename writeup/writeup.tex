@@ -377,6 +377,31 @@ Then, raising a polynomial of $969$ terms to the $5$ results in $37115800155$ re
 The OEIS thing isn't enough, need another formula that takes numVars, degree, and power to compute the maximum coefficient.
 
 
+How current trivial implementation of raising to power works.
+
+HostPolynomials are polynomials with coefficients and degrees stored on the host device (CPU)
+\begin{itemize}
+    \item{RaiseToPower(p::HostPolynomial, power::Int)::HostPolynomial}
+    \begin{itemize}
+        \item{TrivialMultiply(p1::HP, p2::HP)::HP}
+        \begin{itemize}
+            \item{\textbf{if length(p1)*length(p2) = $n$ is not a multiple of nthreads, then pad p1 to multiple of number of threads}}
+            \item{create result array of length $n$, initialize $n$ threads}
+            \item{each thread figures out which two elements it has to work with, and writes to its corresponding index in result}
+            \item{sort by first index (julia has its own method for this)}
+            \item{reduceByKey()}
+            \begin{itemize}
+                \item {\textbf{pads both arrays to length of $2^n + 1$ (generateFlags() and segmentedScan() need this to work)}}
+                \item {generatesFlags()}
+                \item {inclusive scan on generatesFlags() - generates indices for each key}
+                \item {segmentedScan() - upsweep and downsweep are both $n \log n$ and fully parallelized}
+                \item {reduce() - go through keys array again, and puts key and value into their corresponding indices if the key is flagged as a segment end}
+            \end{itemize}
+        \end{itemize}
+    \end{itemize}
+\end{itemize}
+
+
 
 \end{document}
 

@@ -1,14 +1,5 @@
 using CUDA
-
-# Returns padded array to next power of 2
-function pad_to_next_power_of_2_plus_1(arr::Vector{T}) where T
-    current_length = length(arr)
-    next_power_of_2 = 2^ceil(Int, log2(current_length))
-    padding_length = next_power_of_2 - current_length + 1
-    padded_array = vcat(arr, zeros(T, padding_length))
-    
-    return padded_array
-end
+include("utils.jl")
 
 function segmented_scan_upsweep_kernel(data, flags_tmp, d)
     i = threadIdx().x + (blockIdx().x - 1) * blockDim().x - 1
@@ -57,10 +48,11 @@ function generate_start_flags_kernel(keys, flags)
     return nothing
 end
 
-function reduce_by_key(keys::Array{T}, values::Array{V}) where {T, V<:Integer}
-    @assert length(keys) == length(values) "Keys and values cannot be different lengths"
-    cu_keys = CuArray(pad_to_next_power_of_2_plus_1(keys))
-    cu_values = CuArray(pad_to_next_power_of_2_plus_1(values))
+function reduce_by_key(cu_keys::CuArray{T}, cu_values::CuArray{V}) where {T, V<:Integer}
+    @assert length(cu_keys) == length(cu_values) "Keys and values cannot be different lengths"
+    @assert is_pow_2(length(cu_keys) - 1) "Keys and values must be length of 2^k + 1 (see ../testing files/ReduceByKey.jl for more general implementation)"
+
+    # Flags must be type Int32 because we run a prefix scan on it to get result indices
     flags = CUDA.fill(Int32(0), length(cu_keys))
 
     nthreads = min(512, length(cu_keys) - 1)
@@ -72,11 +64,12 @@ function reduce_by_key(keys::Array{T}, values::Array{V}) where {T, V<:Integer}
         generate_start_flags_kernel(cu_keys, flags)
     )
 
-    CUDA.@sync @cuda threads = 1 blocks = 1 set_value(flags, 1, 1)
+    CUDA.@sync @cuda set_value(flags, 1, 1)
     
     key_indices = accumulate(+, flags)
 
-    length_of_reduced_keys = Array(key_indices)[end]
+    # hack to get the last element
+    length_of_reduced_keys = get_last_element(key_indices)
 
     cu_seg_reduced = segmented_scan(cu_values, flags)
 
@@ -153,7 +146,12 @@ end
 
 function reduce_arr(cu_keys, cu_values)
     sorted_keys, sorted_values = sort_keys_with_values(cu_keys, cu_values)
+    CUDA.unsafe_free!(cu_keys)
+    CUDA.unsafe_free!(cu_values)
+
     reduced_keys, reduced_values = reduce_by_key(sorted_keys, sorted_values)
+    CUDA.unsafe_free!(sorted_keys)
+    CUDA.unsafe_free!(sorted_values)
 
     return reduced_keys, reduced_values
 end
