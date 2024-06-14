@@ -1,4 +1,5 @@
 using CUDA
+using BenchmarkTools
 include("utils.jl")
 
 function segmented_scan_upsweep_kernel(data, flags_tmp, d)
@@ -48,7 +49,8 @@ function generate_start_flags_kernel(keys, flags)
     return nothing
 end
 
-function reduce_by_key(cu_keys::CuArray{T}, cu_values::CuArray{V}) where {T, V<:Integer}
+# function reduce_by_key(cu_keys::CuArray{T}, cu_values::CuArray{V}) where {T, V<:Integer}
+function reduce_by_key(cu_keys::CuArray{T}, cu_values::CuArray{V}) where {T, V<:Number}
     @assert length(cu_keys) == length(cu_values) "Keys and values cannot be different lengths"
     @assert is_pow_2(length(cu_keys) - 1) "Keys and values must be length of 2^k + 1 (see ../testing files/ReduceByKey.jl for more general implementation)"
 
@@ -144,6 +146,8 @@ function sort_keys_with_values(keys, values)
     return sorted_keys, sorted_values
 end
 
+
+
 function reduce_arr(cu_keys, cu_values)
     sorted_keys, sorted_values = sort_keys_with_values(cu_keys, cu_values)
     CUDA.unsafe_free!(cu_keys)
@@ -180,3 +184,6 @@ function generate_compositions(n, k, type::DataType = Int32)
 
     return compositions
 end
+
+
+

@@ -2,14 +2,14 @@ module PolynomialModule
 using CUDA
 global MAX_THREADS_PER_BLOCK = 512
 
-function encode_degrees(degrees::Array{T, 2}, maxResultingDegree)::CuArray{T, 1} where {T<:Unsigned}
+function encode_degrees(degrees::Array{T, 2}, maxResultingDegree)::CuArray{T, 1} where {T<:Number}
     
     nthreads = min(size(degrees, 1), MAX_THREADS_PER_BLOCK)
     nblocks = fld(size(degrees, 1), nthreads)
 
     last_block_threads = size((degrees), 1) - nthreads * nblocks
 
-    result = CUDA.zeros(UInt64, size(degrees, 1))
+    result = CUDA.zeros(Float32, size(degrees, 1))
     cu_degrees = CuArray(degrees)
 
     if (last_block_threads > 0)
@@ -38,8 +38,7 @@ function encode_degrees_kernel!(cu_degrees, maxResultingDegree, result, numVars,
     return nothing
 end
 
-function decode_degrees(degrees::CuArray{T, 1}, numVars, maxResultingDegree)::Array{T, 2} where {T<:Unsigned}
-
+function decode_degrees(degrees::CuArray{T, 1}, numVars, maxResultingDegree)::Array{T, 2} where {T<:Number}
     nthreads = min(size(degrees, 1), MAX_THREADS_PER_BLOCK)
     nblocks = fld(size(degrees, 1), nthreads)
 
@@ -88,9 +87,9 @@ mutable struct HostPolynomial{T}
     numTerms::Int
 end
 
-mutable struct EncodedDevicePolynomial{T}
+mutable struct EncodedDevicePolynomial{T, U}
     coeffs::CuArray{T, 1}
-    encodedDegrees::CuArray{UInt64, 1}
+    encodedDegrees::CuArray{U, 1}
     maxResultingDegree::Int
     numTerms::Int
 end
@@ -99,7 +98,8 @@ function EncodedDevicePolynomial(hp::HostPolynomial{T}) where T
     return EncodedDevicePolynomial(CuArray(hp.coeffs), encode_degrees(hp.degrees, hp.maxResultingDegree), hp.maxResultingDegree, hp.numTerms)
 end
 
-function HostPolynomial(coeffs::Array{T, 1}, degrees::Array{U}, maxResultingDegree = 100) where {T, U<:Integer}
+# function HostPolynomial(coeffs::Array{T, 1}, degrees::Array{U}, maxResultingDegree = 100) where {T, U<:Integer}
+function HostPolynomial(coeffs::Array{T, 1}, degrees::Array{U}, maxResultingDegree = 100) where {T, U<:Number}
     if !(length(size(degrees)) != 1 || length(size(degrees)) != 2)
         throw(ArgumentError("Degrees array must have dimension 1 or 2"))
     end
