@@ -22,17 +22,17 @@ which depending on the user doesn't have to happen.
 """
 
 
-# 33554432 x 33554432
+# # 33554432 x 33554432
 
-println("33554432 x 33554432:")
-p1 = [1 for i in 1:2^25]
-p2 = [1 for i in 1:2^25]
-# @test CPUMultiply(p1, p2) == Array(GPUMultiply(p1, p2))
-# print("CPUMultiply: ") # 
-# @btime CPUMultiply(p1, p2)  
-print("GPUMultiply: ") # 
-@btime GPUMultiply(p1, p2)
-println()
+# println("33554432 x 33554432:")
+# p1 = [1 for i in 1:2^25]
+# p2 = [1 for i in 1:2^25]
+# # @test CPUMultiply(p1, p2) == Array(GPUMultiply(p1, p2))
+# # print("CPUMultiply: ") # 
+# # @btime CPUMultiply(p1, p2)  
+# print("GPUMultiply: ") # 
+# @btime GPUMultiply(p1, p2)
+# println()
 
 
 # 32768 x 32768

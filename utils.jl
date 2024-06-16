@@ -10,7 +10,7 @@ Also doubles as storage for code I wrote earlier that isn't completely useless
 Compute the reversed bitwise representation of integer x and return
 the result.
 
-Does not work when x >= 2^log2n
+Does not work when x >= n
 """
 function bitReverse(x, log2n)
     temp = 0

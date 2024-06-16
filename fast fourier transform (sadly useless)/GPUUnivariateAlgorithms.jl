@@ -98,7 +98,7 @@ end
 
 Return the DFT of vector p as a vector. Output can be complex.
 
-Does not work when log2(length(p)) ∉ z
+Does not work when log2(length(p)) is not an integer
 """
 function GPUDFT(p, n, log2n, inverted = 1)
     result = CUDA.fill(ComplexF32(0), n)
@@ -141,7 +141,7 @@ Copies bit-reversed indices in p to result
 """
 function parallelBitReverseCopy(p, result, n, log2n)
     idx1 = threadIdx().x + (blockIdx().x - 1) * blockDim().x - 1
-    idx2 = idx1 + Int32(n/2)
+    idx2 = idx1 + Int(n/2)
 
     rev1 = bitReverse(idx1, log2n)
     rev2 = bitReverse(idx2, log2n)

@@ -46,8 +46,6 @@ function trivial_multiply(p1::PolynomialModule.EncodedDevicePolynomial{T}, p2::P
     end
 
     cu_sortedResultDegrees, cu_sortedResultCoeffs = sort_keys_with_values(cu_unreducedResultDegrees, cu_unreducedResultCoeffs)
-    
-    # println(length(cu_sortedResultDegrees))
 
     CUDA.unsafe_free!(cu_unreducedResultCoeffs)
     CUDA.unsafe_free!(cu_unreducedResultDegrees)
@@ -121,51 +119,29 @@ end
 #     0 0 0 1
 # ]
 
-tempp1 = PolynomialModule.HostPolynomial([1 for _ in 1:8000], rand(1:10, 8000, 4), 81)
-tempp2 = PolynomialModule.HostPolynomial([1 for _ in 1:8000], rand(1:10, 8000, 4), 81)
+#=
+degrees = generate_compositions(4, 4)
+coeffs = [1 for _ in 1:size(degrees, 1)]
 
-p1 = PolynomialModule.EncodedDevicePolynomial(tempp1)
-p2 = PolynomialModule.EncodedDevicePolynomial(tempp2)
+polynomial = PolynomialModule.HostPolynomial(coeffs, degrees, 81)
 
-println("Multiplying 8000 terms by 8000 terms: ")
-println("Using Int64: ")
-# trivial_multiply(p1, p2)
-CUDA.@time trivial_multiply(p1, p2)
+println("raising to the 4th power:")
+polynomial2 = raise_to_power(polynomial, 4, 5)
 
-tempp3 = PolynomialModule.HostPolynomial(Float32.([1 for _ in 1:8000]), Float32.(rand(1:10, 8000, 4)), 81)
-tempp4 = PolynomialModule.HostPolynomial(Float32.([1 for _ in 1:8000]), Float32.(rand(1:10, 8000, 4)), 81)
-
-println("Using Float32: ")
-p3 = PolynomialModule.EncodedDevicePolynomial(tempp3)
-p4 = PolynomialModule.EncodedDevicePolynomial(tempp4)
-
-CUDA.@time trivial_multiply(p3, p4)
-
-# degrees = generate_compositions(4, 4)
-# coeffs = [1 for _ in 1:size(degrees, 1)]
-
-# polynomial = PolynomialModule.HostPolynomial(coeffs, degrees, 81)
-
-# println("raising to the 4th power:")
-# polynomial2 = raise_to_power(polynomial, 4, 5)
-
-# maxpolynomial2 = PolynomialModule.HostPolynomial([4 for _ in 1:polynomial2.numTerms], polynomial2.degrees)
-# println("raising $(polynomial2.numTerms) terms to the 5th power:")
-# polynomial3 = raise_to_power(maxpolynomial2, 5)
-# maxcoeff, idx = findmax(polynomial3.coeffs)
-# maxdegrees = Int.((polynomial3.degrees)[idx, :])
-# println("max coeff: ", maxcoeff)
-# println("max coeff's variables: ", maxdegrees)
-# println("number of terms: $(polynomial3.numTerms)")
-
-
-
-
+maxpolynomial2 = PolynomialModule.HostPolynomial([4 for _ in 1:polynomial2.numTerms], polynomial2.degrees)
+println("raising $(polynomial2.numTerms) terms to the 5th power:")
+polynomial3 = raise_to_power(maxpolynomial2, 5)
+maxcoeff, idx = findmax(polynomial3.coeffs)
+maxdegrees = Int.((polynomial3.degrees)[idx, :])
+println("max coeff: ", maxcoeff)
+println("max coeff's variables: ", maxdegrees)
+println("number of terms: $(polynomial3.numTerms)")
+=#
 
 # println("raising $(polynomial2.numTerms) terms to the 5th power:")
-# polynomial3 = raise_to_power(polynomial2, 5)
-# raise_to_power(polynomial2, 5)
-# println("Resulting polynomial has $(polynomial3.numTerms) terms")
+# # polynomial3 = raise_to_power(polynomial2, 5)
+# CUDA.@profile raise_to_power(polynomial2, 5)
+# # println("Resulting polynomial has $(polynomial3.numTerms) terms")
 
 
 

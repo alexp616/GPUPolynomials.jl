@@ -65,16 +65,17 @@ function blah2(p1, p2)
     return result
 end
 
-# @btime blah(p1, p2)
-# @btime blah2(p1, p2)
+blah(p1, p2)
+CUDA.@time blah(p1, p2)
+CUDA.@time blah2(p1, p2)
 
-function get_last_element(arr)
-    return Array(arr)[end]
-end
+# function get_last_element(arr)
+#     return Array(arr)[end]
+# end
 
-a = 0
-@btime a = Array(p1[end:end])[1]
-@btime a = get_last_element(p1)
+# a = 0
+# @btime a = Array(p1[end:end])[1]
+# @btime a = get_last_element(p1)
 
 # function set_value(arr, idx, num)
 #     arr[idx] = num
