@@ -2,8 +2,8 @@ using CUDA
 using BenchmarkTools
 
 
-p1 = CuArray([i for i in 1:500])
-p2 = CuArray([i*10 for i in 1:500])
+p1 = CuArray([i for i in 1:5000])
+p2 = CuArray([i*10 for i in 1:5000])
 
 function blah(p1, p2)
 
@@ -23,16 +23,18 @@ function blah(p1, p2)
         return
     end
 
-    @cuda(
+    if last_block_threads > 0
+        @cuda(
+            threads = last_block_threads,
+            blocks = 1,
+            kernel(p1, p2, length(p2), result, nthreads * nblocks)
+        )
+    end
+
+    CUDA.@sync @cuda(
         threads = nthreads,
         blocks = nblocks,
         kernel(p1, p2, length(p2), result, 0)
-    )
-
-    CUDA.@sync @cuda(
-        threads = last_block_threads,
-        blocks = 1,
-        kernel(p1, p2, length(p2), result, nthreads * nblocks)
     )
     
     return result
@@ -65,9 +67,20 @@ function blah2(p1, p2)
     return result
 end
 
-blah(p1, p2)
+jit = CuArray([1, 2, 3])
+blah(jit, jit)
+blah2(jit, jit)
+
+
 CUDA.@time blah(p1, p2)
 CUDA.@time blah2(p1, p2)
+
+# for 5000 x 5000:
+# blah() 23 ms
+# blah2() 36 ms
+
+
+
 
 # function get_last_element(arr)
 #     return Array(arr)[end]

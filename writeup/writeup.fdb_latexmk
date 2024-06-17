@@ -1,5 +1,5 @@
 # Fdb version 4
-["pdflatex"] 1717409195.60413 "c:/Users/Alex/Downloads/polynomial-multiplication-fft/writeup/writeup.tex" "writeup.pdf" "writeup" 1717409196.36443 0
+["pdflatex"] 1718591976.68618 "c:/Users/Alex/Downloads/polynomial-multiplication-fft/writeup/writeup.tex" "writeup.pdf" "writeup" 1718591977.44231 0
   "C:/Users/Alex/AppData/Local/MiKTeX/fonts/map/pdftex/pdftex.map" 1712179523 81760 910369822cd2d7c359b2482f4c0de4ca ""
   "C:/Users/Alex/AppData/Local/MiKTeX/fonts/pk/ljfour/jknappen/ec/dpi600/tcrm1000.pk" 1712112269 11548 39efeafed6327b033d5cc0a917c49dba ""
   "C:/Users/Alex/AppData/Local/MiKTeX/miktex/data/le/pdftex/pdflatex.fmt" 1711990881 24224573 07cca7181cb9494b8d637cbebaf00535 ""
@@ -106,10 +106,10 @@
   "C:/Users/Alex/AppData/Local/Programs/MiKTeX/tex/latex/wasysym/uwasy.fd" 1579693002 2296 c50bf1089c7a46a0d4e9a119e980be4e ""
   "C:/Users/Alex/AppData/Local/Programs/MiKTeX/tex/latex/wasysym/wasysym.sty" 1579693002 11252 7fbfbe7bbcbe1f73acbe32ae2f10c666 ""
   "C:/Users/Alex/AppData/Local/Programs/MiKTeX/tex/latex/xkeyval/xkeyval.sty" 1656236919 4937 4ce600ce9bd4ec84d0250eb6892fcf4f ""
-  "c:/Users/Alex/Downloads/polynomial-multiplication-fft/writeup/writeup.tex" 1717409194 3791 ef3caa189455103cd96d544a466b8298 ""
-  "writeup.aux" 1717409196 199 1fdbbfd116ec39a4873d992c0ebeaf6b "pdflatex"
-  "writeup.out" 1717409196 0 d41d8cd98f00b204e9800998ecf8427e "pdflatex"
-  "writeup.tex" 1717409194 3791 ef3caa189455103cd96d544a466b8298 ""
+  "c:/Users/Alex/Downloads/polynomial-multiplication-fft/writeup/writeup.tex" 1718591976 3789 4ddbe0ef8cb3a04c9dae7b76adc5b6bb ""
+  "writeup.aux" 1718591977 199 1fdbbfd116ec39a4873d992c0ebeaf6b "pdflatex"
+  "writeup.out" 1718591977 0 d41d8cd98f00b204e9800998ecf8427e "pdflatex"
+  "writeup.tex" 1718591976 3789 4ddbe0ef8cb3a04c9dae7b76adc5b6bb ""
   (generated)
   "writeup.aux"
   "writeup.log"
