@@ -42,7 +42,8 @@ function parallelBitReverseCopy(p)
 
     log2n = Int(log2(len))
 
-    CUDA.@sync @cuda(
+    # CUDA.@sync @cuda(
+    @cuda(
         threads = nthreads,
         blocks = nblocks,
         parallelBitReverseCopyKernel(p, result, len, log2n)
@@ -69,7 +70,8 @@ function GPUDFT2!(arr, inverted = 1)
 
     log2numCols = Int(log2(numCols))
 
-    CUDA.@sync @cuda(
+    # CUDA.@sync @cuda(
+    @cuda(
         threads = nthreadsrow,
         blocks = nblocksrow,
         GPUDFTRowParentKernel!(arr, nthreadsrowchild, nblocksrowchild, log2numCols, inverted)
@@ -85,7 +87,8 @@ function GPUDFT2!(arr, inverted = 1)
 
     log2numRows = Int(log2(numRows))
 
-    CUDA.@sync @cuda(
+    # CUDA.@sync @cuda(
+    @cuda(
         threads = nthreadscol,
         blocks = nblockscol,
         GPUDFTColParentKernel!(arr, nthreadscolchild, nblockscolchild, log2numRows, inverted)
@@ -193,12 +196,13 @@ function pad_columns(arr, numColumns)
 end
 
 # Change these to any powers of 2, our goal is 8192 x 8192
-rows = 256
-cols = 256
+rows = 512
+cols = 512
 p1 = CUDA.fill(1, rows, cols)
 
 pregen_butterfly = generate_butterfly_permutations(rows, cols)
 
 println("Time to multiply a $rows x $cols by a $rows x $cols array")
-CUDA.@time multiply_2d!(p1, p1, pregen_butterfly)
-""
+pregen_butterfly2 = generate_butterfly_permutations(4, 4)
+multiply_2d!(CUDA.fill(1, 4, 4), CUDA.fill(1, 4, 4), pregen_butterfly2)
+CUDA.@profile multiply_2d!(p1, p1, pregen_butterfly)

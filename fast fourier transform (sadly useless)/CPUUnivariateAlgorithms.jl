@@ -81,6 +81,7 @@ function CPUDFT(p, n, log2n, inverted = 1)
         m2 = m >> 1
         theta = complex(1,0)
         theta_m = cis(inverted * pi/m2)
+        println("theta_m: $theta_m")
         for j in 0:m2-1
             for k in j:m:n-1
                 t = theta * result[k + m2 + 1]
@@ -96,6 +97,7 @@ function CPUDFT(p, n, log2n, inverted = 1)
     return result
 end
 
+CPUDFT([1, 2, 3, 4, 0, 0, 0, 0], 8, 3)
 
 """
     CPUIDFT(y, log2n, n)

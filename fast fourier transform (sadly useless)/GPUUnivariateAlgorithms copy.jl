@@ -75,21 +75,18 @@ the resulting polynomial as an vector. Assumes coefficients are integers.
 
 GPU-Parallelized version of cpuMultiply in CPUAlgorithms.jl
 """
-function GPUMultiply(p1, p2)
-    # TODO Try putting everything into one method to see if significant change in speed
-    n = Int(2^ceil(log2(length(p1) + length(p2) - 1)))
+function GPUPow(p1, pow)
+    n = nextpow(2, (length(p1) - 1) * pow + 1)
     log2n = UInt32(log2(n));
-    finalLength = length(p1) + length(p2) - 1
+    finalLength = (length(p1) - 1) * pow + 1
 
     # TODO Decide whether throwing an if statement in the DFTs is faster or
     # if all of this memory copying is necessary.
     cudap1 = CuArray(append!(copy(p1), zeros(Int, n - length(p1))))
-    cudap2 = CuArray(append!(copy(p2), zeros(Int, n - length(p2))))
 
     cudap1 = GPUDFT(cudap1, n, log2n)
-    cudap2 = GPUDFT(cudap2, n, log2n)
 
-    return Int.(round.(real.(Array(GPUIDFT(cudap1 .* cudap2, n, log2n))[1:finalLength])))
+    return Int.(round.(real.(Array(GPUIDFT(cudap1 .^ pow, n, log2n))[1:finalLength])))
 end
 
 
@@ -184,11 +181,13 @@ function GPUIDFT(y, n, log2n)
     return GPUDFT(y, n, log2n, -1) ./ n
 end
 
-polynomial1 = [1, 2, 3, 4]
 
-result = GPUMultiply(polynomial1, polynomial1)
+polynomial1 = [1, 2, 3]
+pow = 5
 
-result
+println("Computing $polynomial1 to the $pow power: ")
+result = GPUPow(polynomial1, pow)
+println(result)
 
 
 # TEST CASE
