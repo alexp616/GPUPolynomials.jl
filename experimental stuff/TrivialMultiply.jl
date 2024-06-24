@@ -119,7 +119,7 @@ end
 #     0 0 0 1
 # ]
 
-
+#=
 degrees = generate_compositions(4, 4)
 coeffs = [4 for _ in 1:size(degrees, 1)]
 
@@ -129,6 +129,7 @@ println("raising to the 4th power:")
 polynomial2 = raise_to_power(polynomial, 4)
 
 println(maximum(polynomial2.coeffs))
+=#
 
 
 # maxpolynomial2 = PolynomialModule.HostPolynomial([4 for _ in 1:polynomial2.numTerms], polynomial2.degrees)
