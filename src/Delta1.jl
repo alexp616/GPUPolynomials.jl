@@ -15,16 +15,16 @@ end
 struct Delta1Pregen
     numVars::Int
     prime::Int
-    cpuprime::Int
-    cpunpru::Int
-    cpupregen_butterfly::Array{Int, 1}
-    gpuprimearray2::Array{Int, 1}
-    gpunpruarray2::Array{Int, 1}
-    gpupregen_butterfly::CuArray{Int, 1}
-    cpuinputlen::Int
-    cpuoutputlen::Int
-    gpuinputlen::Int
-    gpuoutputlen::Int
+    cpuPrime::Int
+    cpuNpru::Int
+    cpuPregenButterfly::Array{Int, 1}
+    gpuPrimeArray::Array{Int, 1}
+    gpuNpruArray::Array{Int, 1}
+    gpuPregenButterfly::CuArray{Int, 1}
+    cpuInputLen::Int
+    cpuOutputLen::Int
+    gpuInputLen::Int
+    gpuOutputLen::Int
     key1::Int
     key2::Int
 end
@@ -34,33 +34,33 @@ function pregen_delta1(numVars::Int, prime::Int)
     @assert prime == 5 "I havent figured out upper bounds for other primes yet"
     @assert numVars == 4 "I haven't figured out upper bounds for 5 variables yet"
     
-    # Almost all of these as of now are prime numbers I hand-selected, 
+    # All of these as of now are prime numbers I hand-selected, 
     # I can hand-select primes for primes > 5 when the time comes. Though FFT might slow down a bit
     step1ResultDegree = numVars * (prime - 1)
     # len1 stores the size of the input into CPUNTT
-    cpuinputlen = numVars * (step1ResultDegree + 1) ^ (numVars - 2) + 1
-    # cpuoutputlen stores the size of the output of CPUNTT
-    cpuoutputlen = nextpow(2, (cpuinputlen - 1) * (prime - 1) + 1)
-    prime1 = 2654209
-    npru1 = nth_principal_root_of_unity(cpuoutputlen, 2654209)
-    cpu_pregen_butterfly = Array(generate_butterfly_permutations(cpuoutputlen))
+    cpuInputLen = numVars * (step1ResultDegree + 1) ^ (numVars - 2) + 1
+    # cpuOutputLen stores the size of the output of CPUNTT
+    cpuOutputLen = nextpow(2, (cpuInputLen - 1) * (prime - 1) + 1)
+    cpuPrime = 2654209
+    cpuNpru = nth_principal_root_of_unity(cpuOutputLen, 2654209)
+    cpuPregenButterfly = Array(generate_butterfly_permutations(cpuOutputLen))
 
     step2ResultDegree = step1ResultDegree * prime
     # len3 stores the size of the input into GPUNTT
-    gpuinputlen = step1ResultDegree * (step2ResultDegree + 1) ^ (numVars - 2) + 1
+    gpuInputLen = step1ResultDegree * (step2ResultDegree + 1) ^ (numVars - 2) + 1
     primearray2 = [330301441, 311427073]
-    # gpuoutputlen stores the size of the output of GPUNTT
-    gpuoutputlen = nextpow(2, (gpuinputlen - 1) * prime + 1)
-    npruarray2 = npruarray_generator(primearray2, gpuoutputlen)
-    gpu_pregen_butterfly = generate_butterfly_permutations(gpuoutputlen)
+    # gpuOutputLen stores the size of the output of GPUNTT
+    gpuOutputLen = nextpow(2, (gpuInputLen - 1) * prime + 1)
+    npruarray2 = npruarray_generator(primearray2, gpuOutputLen)
+    gpu_pregenButterfly = generate_butterfly_permutations(gpuOutputLen)
 
-    return Delta1Pregen(numVars, prime, prime1, npru1, cpu_pregen_butterfly, primearray2, npruarray2, gpu_pregen_butterfly, cpuinputlen, cpuoutputlen, gpuinputlen, gpuoutputlen, step1ResultDegree + 1, step2ResultDegree + 1)
+    return Delta1Pregen(numVars, prime, cpuPrime, cpuNpru, cpuPregenButterfly, primearray2, npruarray2, gpu_pregenButterfly, cpuInputLen, cpuOutputLen, gpuInputLen, gpuOutputLen, step1ResultDegree + 1, step2ResultDegree + 1)
 end
 
 function kronecker_substitution(hp::HomogeneousPolynomial, pow::Int, pregen::Delta1Pregen)::Array{Int, 1}
     key = hp.homogeneousDegree * pow + 1
 
-    result = zeros(Int, pregen.cpuinputlen)
+    result = zeros(Int, pregen.cpuInputLen)
     for termidx in eachindex(hp.coeffs)
         # encoded = 1 because julia 1-indexing
         encoded = 1
@@ -75,18 +75,15 @@ function kronecker_substitution(hp::HomogeneousPolynomial, pow::Int, pregen::Del
 end
 
 function decode_kronecker_substitution(arr, key, numVars, totalDegree)
-    ######################################################
-    start_time = now()
     flags = map(x -> x != 0 ? 1 : 0, arr)
     indices = accumulate(+, flags)
-    # println("\tSettings flags and getting indices took $(now() - start_time)")
-    ######################################################
-    start_time = now()
+
+    # there must be a faster way to do this
     resultLen = Array(indices)[end]
-    # println("\tGetting last element took $(now() - start_time)")
-    ######################################################
+
     resultCoeffs = CUDA.zeros(Int, resultLen)
     resultDegrees = CUDA.zeros(Int, resultLen, numVars)
+
     function decode_kronecker_kernel(resultCoeffs, resultDegrees, arr, flags, indices, key, numVars, totalDegree, offset = 0)
         idx = threadIdx().x + (blockIdx().x - 1) * blockDim().x + offset
         if flags[idx] != 0
@@ -109,8 +106,10 @@ function decode_kronecker_substitution(arr, key, numVars, totalDegree)
 
     last_block_threads = length(arr) - nthreads * nblocks
 
-    ######################################################
-    start_time = now()
+    # I have this last_block_threads thing because it ran slightly faster than
+    # padding to the next multiple of nthreads, might not be the same on other machines
+    # Also, the gpu kernels I see in CUDA.jl have some if tid < length(arr) ... stuff,
+    # that just index out of bounds for me if I do that
     if last_block_threads > 0
         @cuda(
             threads = last_block_threads,
@@ -124,9 +123,6 @@ function decode_kronecker_substitution(arr, key, numVars, totalDegree)
         blocks = nblocks,
         decode_kronecker_kernel(resultCoeffs, resultDegrees, arr, flags, indices, key, numVars, totalDegree)
     )
-    
-    # println("\t decode_kernecker_kernel took $(now() - start_time)")
-    ######################################################
     
     return HomogeneousPolynomial(Array(resultCoeffs), Array(resultDegrees), totalDegree)
 end
@@ -142,7 +138,7 @@ function change_encoding(num::Int, e1::Int, e2::Int, numValues::Int)
 end
 
 function change_polynomial_encoding(p::Array{Int, 1}, pregen::Delta1Pregen)
-    result = zeros(Int, pregen.gpuinputlen)
+    result = zeros(Int, pregen.gpuInputLen)
     for i in eachindex(p)
         if p[i] != 0
             result[change_encoding(i - 1, pregen.key1, pregen.key2, pregen.numVars - 1) + 1] = p[i]
@@ -152,31 +148,23 @@ function change_polynomial_encoding(p::Array{Int, 1}, pregen::Delta1Pregen)
     return result
 end
 
-function delta_1(hp::HomogeneousPolynomial, prime, pregen::Delta1Pregen)
+function delta1(hp::HomogeneousPolynomial, prime, pregen::Delta1Pregen)
     @assert prime == pregen.prime && size(hp.degrees, 2) == pregen.numVars "Current pregen isn't compatible with input"
 
-    start_time = now()
     # Raising f ^ p - 1
-    cpuinput = kronecker_substitution(hp, prime - 1, pregen)
-    cpuoutput = cpu_pow(cpuinput, prime - 1; prime = pregen.cpuprime, npru = pregen.cpunpru, len = pregen.cpuoutputlen, pregen_butterfly = pregen.cpupregen_butterfly)
+    cpuInput = kronecker_substitution(hp, prime - 1, pregen)
+    cpuOutput = cpu_pow(cpuInput, prime - 1; prime = pregen.cpuPrime, npru = pregen.cpuNpru, len = pregen.cpuOutputLen, pregenButterfly = pregen.cpuPregenButterfly)
 
     # Reduce mod p
-    cpuoutput .%= prime
+    cpuOutput .%= prime
 
     # println("CPU part took $(now() - start_time)")
 
     # Raising g ^ p
-    start_time = now()
-    gpuinput = CuArray(change_polynomial_encoding(cpuoutput, pregen))
-    # println("Changing polynomial encoding took $(now() - start_time)")
-    start_time = now()
-    gpuoutput = GPUPow(gpuinput, prime; primearray = pregen.gpuprimearray2, npruarray = pregen.gpunpruarray2, len = pregen.gpuoutputlen, pregen_butterfly = pregen.gpupregen_butterfly)
+    gpuInput = CuArray(change_polynomial_encoding(cpuOutput, pregen))
+    gpuOutput = GPUPow(gpuInput, prime; primearray = pregen.gpuPrimeArray, npruarray = pregen.gpuNpruArray, len = pregen.gpuOutputLen, pregenButterfly = pregen.gpuPregenButterfly)
 
-    # println("GPU raising to power took $(now() - start_time)")
-
-    start_time = now()
-    result = decode_kronecker_substitution(gpuoutput, pregen.key2, pregen.numVars, pregen.key2 - 1)
-    # println("Decoding kronecker substitution took $(now() - start_time)")
+    result = decode_kronecker_substitution(gpuOutput, pregen.key2, pregen.numVars, pregen.key2 - 1)
     return result
 
     # Haven't added other steps yet
@@ -199,7 +187,7 @@ polynomial2 = HomogeneousPolynomial(coeffs2, degrees2)
 pregen = pregen_delta1(4, 5)
 
 println("Time to raise 4-variate polynomial to the 4th and 5th power for the first time: ")
-CUDA.@time result = delta_1(polynomial, 5, pregen)
+CUDA.@time result = delta1(polynomial, 5, pregen)
 
 println("Time to raise different 4-variate polynomial to the 4th and 5th power: ")
-CUDA.@time result2 = delta_1(polynomial2, 5, pregen)
+CUDA.@time result2 = delta1(polynomial2, 5, pregen)

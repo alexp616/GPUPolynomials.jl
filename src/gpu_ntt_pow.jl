@@ -1,10 +1,4 @@
-using CUDA
-using Test
-using Primes
-using BenchmarkTools
-using Dates
 include("ntt_utils.jl")
-
 
 function generate_butterfly_permutations(n::Int)::CuArray{Int, 1}
     @assert ispow2(n) "n must be a power of 2"
@@ -13,11 +7,6 @@ function generate_butterfly_permutations(n::Int)::CuArray{Int, 1}
 end
 
 
-"""
-    bit_reverse(x, log2n)
-
-Compute the bit-reversal of x
-"""
 function bit_reverse(x, log2n)
     temp = 0
     for i in 0:log2n-1
@@ -56,37 +45,34 @@ function chinese_remainder_two(a, n, b, m)
     return c < 0 ? c + n * m : c
 end
 
-function GPUPow(p1::CuArray{Int, 1}, pow; primearray::Array{Int, 1}, npruarray::Array{Int, 1}, len = -1, pregen_butterfly = nothing)
+function GPUPow(p1::CuArray{Int, 1}, pow; primearray::Array{Int, 1}, npruarray::Array{Int, 1}, len = -1, pregenButterfly = nothing)
     if len == -1
         len = nextpow(2, (length(p1) - 1) * pow + 1)
     end
     log2length = Int(log2(len));
     finalLength = (length(p1) - 1) * pow + 1
 
-    if pregen_butterfly === nothing
-        pregen_butterfly = generate_butterfly_permutations(len)
+    if pregenButterfly === nothing
+        pregenButterfly = generate_butterfly_permutations(len)
     end
 
-    @assert length(pregen_butterfly) == len "pregenerated butterfly doesn't have same length as input"
+    @assert length(pregenButterfly) == len "pregenerated butterfly doesn't have same length as input"
 
-    stackedp1 = repeat((vcat(p1, zeros(Int, len - length(p1)))[pregen_butterfly])', length(primearray), 1)
+    # Padding, stacking for multiple prime modulus, and butterflying indices
+    stackedp1 = repeat((vcat(p1, zeros(Int, len - length(p1)))[pregenButterfly])', length(primearray), 1)
 
-    #############################################################################
-    # start_time = now()
+    # DFT
     GPUDFT(stackedp1, primearray, npruarray, len, log2length, butterflied = true)
-    # println("\tGPUDFT took $(now() - start_time)")
-    #############################################################################
-    # start_time = now()
+
+    # Broadcasting power
     broadcast_pow(stackedp1, primearray, pow)
-    # println("\tbroadcast_pow() took $(now() - start_time)")
-    #############################################################################
-    # start_time = now()
-    multimodularResultArr = GPUIDFT(stackedp1, primearray, npruarray, len, log2length, pregen_butterfly)
-    # println("\tGPUIDFT took $(now() - start_time)")
-    #############################################################################
-    # start_time = now()
+
+    # IDFT
+    multimodularResultArr = GPUIDFT(stackedp1, primearray, npruarray, len, log2length, pregenButterfly)
+
+    # CRT
     result = build_result(multimodularResultArr, primearray)[1:finalLength]
-    # println("\tCRT took $(now() - start_time)")
+
     return result
 end
 
@@ -116,17 +102,12 @@ function broadcast_pow(arr, primearray, pow)
     return
 end
 
-"""
-    GPUIDFT(y, n, log2n)
-
-Return the inverse DFT of vector p as a vector.
-"""
-function GPUIDFT(vec::CuArray{Int, 2}, primearray::Vector{Int}, npruarray::Vector{Int}, len::Int, log2length::Int, pregen_butterfly = nothing)
-    if pregen_butterfly === nothing
-        pregen_butterfly = generate_butterfly_permutations(length)
+function GPUIDFT(vec::CuArray{Int, 2}, primearray::Vector{Int}, npruarray::Vector{Int}, len::Int, log2length::Int, pregenButterfly = nothing)
+    if pregenButterfly === nothing
+        pregenButterfly = generate_butterfly_permutations(length)
     end
 
-    arg1 = vec[:, pregen_butterfly]
+    arg1 = vec[:, pregenButterfly]
     result = GPUDFT(arg1, primearray, mod_inverse.(npruarray, primearray), len, log2length, butterflied = true)
 
     for i in 1:length(primearray)
@@ -137,17 +118,8 @@ function GPUIDFT(vec::CuArray{Int, 2}, primearray::Vector{Int}, npruarray::Vecto
     return result
 end
 
-
-"""
-    GPUDFT(vec, primearray, length, log2length, butterflied = false, inverted = 1)
-
-Return the DFT of vector p as a vector. Output can be complex.
-
-Does not work when log2(length(p)) is not an integer
-"""
 function GPUDFT(vec, primearray::Array{Int, 1}, npruarray, len, log2length; butterflied = false)
     if !butterflied
-        # println("vector was butterflied in dft function instead of multiply")
         perm = generate_butterfly_permutations(len)
         vec = vec[:, perm]
     end
@@ -158,8 +130,6 @@ function GPUDFT(vec, primearray::Array{Int, 1}, npruarray, len, log2length; butt
     nblocks = cld(len ÷ 2, nthreads)
 
     for i in 1:log2length
-        ########################################################################
-        # start_time = now()
         m = 1 << i
         m2 = m >> 1
         magic = 1 << (log2length - i)
@@ -169,18 +139,11 @@ function GPUDFT(vec, primearray::Array{Int, 1}, npruarray, len, log2length; butt
             blocks = nblocks,
             GPUDFTKernel!(vec, cu_primearray, theta_m, magic, m2)
         )
-        # println("\t\titeration $i of DFT took $(now() - start_time)")
-        #######################################################################
     end
 
     return vec
 end
 
-"""
-    GPUDFTKernel!(vec, primearray, theta_m, magic, m2)
-
-Kernel function of GPUDFT()
-"""
 function GPUDFTKernel!(vec, primearray, theta_m, magic, m2)
     idx = threadIdx().x + (blockIdx().x - 1) * blockDim().x - 1
     k = Int(2 * m2 * (idx % magic) + floor(idx/magic))
@@ -226,31 +189,3 @@ function build_result_kernel(result, multimodularResultArr, row, currmod, newpri
 
     return
 end
-
-function npruarray_generator(primearray::Array, n)
-    return map(p -> nth_principal_root_of_unity(n, p), primearray)
-end
-
-
-
-
-
-# GPUPow(CuArray([1, 1]), 5)
-# butterfly = generate_butterfly_permutations(1048576)
-# CUDA.@time result = GPUMultiply(polynomial1, polynomial2, primearray = [17, 233], npruarray = npruarray_generator([17, 233], 8))
-
-# butterfly = generate_butterfly_permutations(nextpow(2, 16 * 17 ^ 2))
-# polynomial1 = CuArray(ones(Int64, 4 * 17 ^ 2))
-
-# primearray1 = [2654209]
-# primearray2 = [40961, 65537]
-
-# # println(npruarray_generator(primearray1, nextpow(2, 16 * 17 ^ 2)))
-# # println(npruarray_generator(primearray2, nextpow(2, 16 * 17 ^ 2)))
-
-# # println("Time to raise 4 variable, 4-homogeneous polynomial to the 4th power: ")
-# result = GPUPow(polynomial1, 4, primearray = [2654209], npruarray = [1304310], pregen_butterfly = butterfly)
-# CUDA.@time result = GPUPow(polynomial1, 4, primearray = [2654209], npruarray = [1304310], pregen_butterfly = butterfly)
-
-# result = GPUPow(polynomial1, 4, primearray = [40961, 65537], npruarray = [243, 6561], pregen_butterfly = butterfly)
-# @benchmark result = GPUPow(polynomial1, 4, primearray = [40961, 65537], npruarray = [243, 6561], pregen_butterfly = butterfly)

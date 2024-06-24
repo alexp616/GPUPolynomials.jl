@@ -1,5 +1,8 @@
 using CUDA
+using Test
 using Primes
+using BenchmarkTools
+using Dates
 
 """
     find_ntt_primes(n)
@@ -23,6 +26,12 @@ function find_ntt_primes(n)
 
     return prime_list
 end
+
+
+function npruarray_generator(primearray::Array, n)
+    return map(p -> nth_principal_root_of_unity(n, p), primearray)
+end
+
 
 # arr = find_ntt_primes(8192)
 # println(arr[1:100])
