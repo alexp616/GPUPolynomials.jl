@@ -100,7 +100,7 @@ function run_all_benchmarks()
   println("--------------GPU-------------")
   benchmarks_gpu()
   println("-------------Oscar------------")
-  benchmarks_oscar()
+#   benchmarks_oscar()
 
   nothing # don't spam the terminal
 end
