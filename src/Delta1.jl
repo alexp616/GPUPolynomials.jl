@@ -48,7 +48,8 @@ function pregen_delta1(numVars::Int, prime::Int)
     step2ResultDegree = step1ResultDegree * prime
     # len3 stores the size of the input into GPUNTT
     gpuInputLen = step1ResultDegree * (step2ResultDegree + 1) ^ (numVars - 2) + 1
-    primearray2 = [330301441, 311427073]
+    # primearray2 = [330301441, 311427073]
+    primearray2 = [13631489, 23068673]
     # gpuOutputLen stores the size of the output of GPUNTT
     gpuOutputLen = nextpow(2, (gpuInputLen - 1) * prime + 1)
     npruarray2 = npruarray_generator(primearray2, gpuOutputLen)
@@ -170,24 +171,27 @@ function delta1(hp::HomogeneousPolynomial, prime, pregen::Delta1Pregen)
     # Haven't added other steps yet
 end
 
-coeffs = [1, 2, 3, 4]
-degrees = [
-    4 0 0 0
-    0 4 0 0
-    0 0 4 0
-    0 0 0 4
-]
+function test_delta1()
+    coeffs = [1, 2, 3, 4]
+    degrees = [
+        4 0 0 0
+        0 4 0 0
+        0 0 4 0
+        0 0 0 4
+    ]
 
-degrees2 = [4 0 0 0; 3 1 0 0; 3 0 1 0; 3 0 0 1; 2 2 0 0; 2 1 1 0; 2 1 0 1; 2 0 2 0; 2 0 1 1; 2 0 0 2; 1 3 0 0; 1 2 1 0; 1 2 0 1; 1 1 2 0; 1 1 1 1; 1 1 0 2; 1 0 3 0; 1 0 2 1; 1 0 1 2; 1 0 0 3; 0 4 0 0; 0 3 1 0; 0 3 0 1; 0 2 2 0; 0 2 1 1; 0 2 0 2; 0 1 3 0; 0 1 2 1; 0 1 1 2; 0 1 0 3; 0 0 4 0; 0 0 3 1; 0 0 2 2; 0 0 1 3; 0 0 0 4]
-coeffs2 = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+    degrees2 = [4 0 0 0; 3 1 0 0; 3 0 1 0; 3 0 0 1; 2 2 0 0; 2 1 1 0; 2 1 0 1; 2 0 2 0; 2 0 1 1; 2 0 0 2; 1 3 0 0; 1 2 1 0; 1 2 0 1; 1 1 2 0; 1 1 1 1; 1 1 0 2; 1 0 3 0; 1 0 2 1; 1 0 1 2; 1 0 0 3; 0 4 0 0; 0 3 1 0; 0 3 0 1; 0 2 2 0; 0 2 1 1; 0 2 0 2; 0 1 3 0; 0 1 2 1; 0 1 1 2; 0 1 0 3; 0 0 4 0; 0 0 3 1; 0 0 2 2; 0 0 1 3; 0 0 0 4]
+    coeffs2 = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
 
-polynomial = HomogeneousPolynomial(coeffs, degrees)
-polynomial2 = HomogeneousPolynomial(coeffs2, degrees2)
+    polynomial = HomogeneousPolynomial(coeffs, degrees)
+    polynomial2 = HomogeneousPolynomial(coeffs2, degrees2)
 
-pregen = pregen_delta1(4, 5)
+    pregen = pregen_delta1(4, 5)
 
-println("Time to raise 4-variate polynomial to the 4th and 5th power for the first time: ")
-CUDA.@time result = delta1(polynomial, 5, pregen)
+    println("Time to raise 4-variate polynomial to the 4th and 5th power for the first time: ")
+    CUDA.@time result = delta1(polynomial, 5, pregen)
 
-println("Time to raise different 4-variate polynomial to the 4th and 5th power: ")
-CUDA.@time result2 = delta1(polynomial2, 5, pregen)
+    println("Time to raise different 4-variate polynomial to the 4th and 5th power: ")
+    CUDA.@time result2 = delta1(polynomial2, 5, pregen)
+    @assert all(x -> x > 0, result2.coeffs)
+end

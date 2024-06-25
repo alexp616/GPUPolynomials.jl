@@ -3,43 +3,59 @@ import time
 def weak_compositions(n, k):
     def generate_compositions(n, k, start=0):
         if k == 1:
-            yield [n]
+            yield (n,)
         else:
             for i in range(n + 1):
                 for comp in generate_compositions(n - i, k - 1, i):
-                    yield [i] + comp
+                    yield (i,) + comp
     
     return list(generate_compositions(n, k))
 
-def compute_largest_term(resultTuple, inputCompositions):
-    result = 0
-    count = 1
-    for composition in inputCompositions:
-        if all(x >= y for x, y in zip(resultTuple, composition)):
-            result += compute_largest_term_subproblem([x - y for x, y in zip(resultTuple, composition)], inputCompositions)
-        print(f"{count} of {len(inputCompositions)} done")
-        count += 1
-    
-    return result
+def clt_helper(resultTuple, inputCompositions):
+    from collections import defaultdict
 
-def compute_largest_term_subproblem(resultTuple, inputCompositions):
-    if all(element == 0 for element in resultTuple):
-        return 1
+    dp = defaultdict(int)
+    dp[(0,) * len(resultTuple)] = 1
 
-    result = 0
-    for composition in inputCompositions:
-        if all(x >= y for x, y in zip(resultTuple, composition)):
-            result += compute_largest_term_subproblem([x - y for x, y in zip(resultTuple, composition)], inputCompositions)
+    # Not idiot-proof
+    while(True):
+        for state in list(dp.keys()):
+            for composition in inputCompositions:
+                new_state = tuple(x + y for x, y in zip(state, composition))
+                if all(x >= y for x, y in zip(resultTuple, new_state)):
+                    dp[new_state] += dp[state]
+            del dp[state]
+        if resultTuple in dp:
+            return dp[resultTuple]
 
-    return result
-# Example usage:
-n = 16
-k = 4
-compositions = weak_compositions(n, k)
+def compute_largest_term_firststep(numVars, prime):
+    scale = (prime - 1) ** (prime - 1)    
+    return scale * clt_helper((prime - 1,) * numVars, weak_compositions(numVars, numVars))
 
-start_time = time.time()
-sus = compute_largest_term([20, 20, 20, 20], compositions)
-print(f"largest term: {sus}")
-end_time = time.time()
-elapsed_time = start_time - end_time
-print(f"Elapsed time: {elapsed_time:.4f} seconds")
+def compute_largest_term(numVars, prime):
+    scale = (prime - 1) ** prime
+    secondStepHomogDegree = numVars * (prime - 1)
+    y = (prime - 1) * prime
+    largestCoefficient = scale * clt_helper((y,) * numVars, weak_compositions(secondStepHomogDegree, numVars))
+    return largestCoefficient
+
+numVars = [4, 5, 6]
+primes = [5, 7, 11, 13]
+
+for n in numVars:
+    for p in primes:
+        t1 = time.time()
+        bound1 = compute_largest_term_firststep(n, p)
+        bound2 = compute_largest_term(n, p)
+        t2 = time.time()
+        print(f"n = {n}, p = {p}: ")
+        print(f"\tbound1 = {bound1}, bound2 = {bound2}")
+        print(f"\ttime taken: {(t2 - t1)} seconds")
+
+
+# t1 = time.time()
+# sus = compute_largest_term(4, 5)
+# t2 = time.time()
+
+# print('largest coefficient: ', sus)
+# print(f'time taken: {t2 - t1} seconds')
