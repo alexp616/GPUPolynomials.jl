@@ -27,11 +27,30 @@ function find_ntt_primes(n)
     return prime_list
 end
 
+# arr = find_ntt_primes(16384)
+# print(arr[1:100])
 
+function get_ntt_length(numVars, prime)
+    step1HomogeneousDegree = numVars * (prime - 1)
+    step1Length = nextpow(2, (step1HomogeneousDegree) * (step1HomogeneousDegree + 1) ^ (numVars - 2))
+    step2HomogeneousDegree = step1HomogeneousDegree * prime 
+    step2Length = nextpow(2, (step2HomogeneousDegree) * (step2HomogeneousDegree + 1) ^ (numVars - 2))
+    return step1Length, step2Length
+end
+
+# println(get_ntt_length(4, 7))
 function npruarray_generator(primearray::Array, n)
     return map(p -> nth_principal_root_of_unity(n, p), primearray)
 end
 
+npruarray = [4, 9]
+primearray = [13, 11]
+
+
+function inverse_generator(npruarray::Array, primearray::Array)
+    @assert length(npruarray) == length(primearray)
+    return mod_inverse.(npruarray, primearray)
+end
 
 # arr = find_ntt_primes(8192)
 # println(arr[1:100])
