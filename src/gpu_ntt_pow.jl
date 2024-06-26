@@ -1,13 +1,35 @@
 include("ntt_utils.jl")
 
+struct GPUPowPregen
+    primeArray::Vector{Int}
+    npruArray::Vector{Int}
+    npruInverseArray::Vector{Int}
+    len::Int
+    log2len::Int
+    lenInverseArray::Vector{Int}
+    pregenButterfly::CuVector{Int}
+    resultType::DataType
+end
+
+function pregen_gpu_pow(;primeArray::Vector{Int}, len::Int, resultType::DataType)
+    @assert ispow2(len) "len must be a power 2"
+
+    npruArray = npruarray_generator(primeArray, len)
+    npruInverseArray = mod_inverse.(npruArray, primeArray)
+    log2len = Int(log2(len))
+    lenInverseArray = map(p -> mod_inverse(len, p), primeArray)
+    pregenButterfly = generate_butterfly_permutations(len)
+
+    return GPUPowPregen(primeArray, npruArray, npruInverseArray, len, log2len, lenInverseArray, pregenButterfly, resultType)
+end
+
 function generate_butterfly_permutations(n::Int)::CuVector{Int}
     @assert ispow2(n) "n must be a power of 2"
     perm = parallelBitReverseCopy(CuArray([i for i in 1:n]))
     return perm
 end
 
-
-function bit_reverse(x, log2n)
+function bit_reverse(x::Integer, log2n::Integer)
     temp = 0
     for i in 0:log2n-1
         temp <<= 1
@@ -17,19 +39,19 @@ function bit_reverse(x, log2n)
     return temp
 end
 
-function extended_gcd_iterative(a, b)
-    x0, x1 = 1, 0
-    y0, y1 = 0, 1
+function extended_gcd_iterative(a::T, b::T) where T<:Integer
+    x0, x1 = T(1), T(0)
+    y0, y1 = T(0), T(1)
     while b != 0
         q = a ÷ b
-        a, b = b, a % b
+        a, b = b, faster_mod(a, b)
         x0, x1 = x1, x0 - q * x1
         y0, y1 = y1, y0 - q * y1
     end
     return (a, x0, y0)
 end
 
-function chinese_remainder_two(a, n, b, m)
+function chinese_remainder_two(a::T, n, b::Integer, m) where T<:Integer
     if a < 0
         a += n
     end
@@ -45,39 +67,28 @@ function chinese_remainder_two(a, n, b, m)
     return c < 0 ? c + n * m : c
 end
 
-function gpu_pow(p1::CuVector{Int}, pow::Int; primearray::Vector{Int}, npruarray::Vector{Int}, len = -1, pregenButterfly::CuVector{Int} = nothing)
-    if len == -1
-        len = nextpow(2, (length(p1) - 1) * pow + 1)
-    end
-    log2length = Int(log2(len));
+function gpu_pow(p1::CuVector{Int}, pow::Int; pregen::GPUPowPregen)
     finalLength = (length(p1) - 1) * pow + 1
 
-    if pregenButterfly === nothing
-        pregenButterfly = generate_butterfly_permutations(len)
-    end
-
-    @assert length(pregenButterfly) == len "pregenerated butterfly doesn't have same length as input"
-
     # Padding, stacking for multiple prime modulus, and butterflying indices
-    stackedp1 = repeat(((vcat(p1, zeros(Int, len - length(p1))))[pregenButterfly])', length(primearray), 1)
-
+    stackedp1 = repeat(((vcat(p1, zeros(Int, pregen.len - length(p1))))[pregen.pregenButterfly])', length(pregen.primeArray), 1)
 
     # DFT
-    gpu_ntt(stackedp1, primearray, npruarray, len, log2length, butterflied = true)
+    gpu_ntt(stackedp1, pregen.primeArray, pregen.npruArray, pregen.len, pregen.log2len)
 
     # Broadcasting power
-    broadcast_pow(stackedp1, primearray, pow)
+    broadcast_pow(stackedp1, pregen.primeArray, pow)
 
     # IDFT
-    multimodularResultArr = gpu_idft(stackedp1, primearray, npruarray, len, log2length, pregenButterfly)
+    multimodularResultArr = gpu_intt(stackedp1, pregen)
 
     # CRT
-    result = build_result(multimodularResultArr, primearray)[1:finalLength]
+    result = build_result(multimodularResultArr, pregen.primeArray, pregen.resultType)[1:finalLength]
 
     return result
 end
 
-function broadcast_pow(arr, primearray, pow)
+function broadcast_pow(arr::CuArray{}, primearray, pow)
     @assert size(arr, 1) == length(primearray)
 
     nthreads = min(size(arr, 2), 512)
@@ -103,37 +114,29 @@ function broadcast_pow(arr, primearray, pow)
     return
 end
 
-function gpu_idft(vec::CuArray{Int, 2}, primearray::Vector{Int}, npruarray::Vector{Int}, len::Int, log2length::Int, pregenButterfly = nothing)
-    if pregenButterfly === nothing
-        pregenButterfly = generate_butterfly_permutations(length)
-    end
+function gpu_intt(vec::CuArray{Int, 2}, pregen::GPUPowPregen)
+    arg1 = vec[:, pregen.pregenButterfly]
+    result = gpu_ntt(arg1, pregen.primeArray, pregen.npruInverseArray, pregen.len, pregen.log2len)
 
-    arg1 = vec[:, pregenButterfly]
-    result = gpu_ntt(arg1, primearray, mod_inverse.(npruarray, primearray), len, log2length, butterflied = true)
-
-    for i in 1:length(primearray)
-        result[i, :] .*= mod_inverse(len, primearray[i])
-        result[i, :] .%= primearray[i]
+    for i in 1:length(pregen.primeArray)
+        # result[i, :] .= map(x -> faster_mod(x * mod_inverse(len, primearray[i]), primearray[i]), result[i, :])
+        result[i, :] .*= pregen.lenInverseArray[i]
+        result[i, :] .%= pregen.primeArray[i]
     end
 
     return result
 end
 
-function gpu_ntt(vec::CuArray{Int}, primearray::Vector{Int}, npruarray::Vector{Int}, len::Int, log2length::Int; butterflied = false)
-    if !butterflied
-        perm = generate_butterfly_permutations(len)
-        vec = vec[:, perm]
-    end
-
-    cu_primearray = CuArray(primearray)
+function gpu_ntt(vec::CuArray{Int}, primeArray, npruArray, len, log2len)
+    cu_primearray = CuArray(primeArray)
     nthreads = min(512, len ÷ 2)
     nblocks = cld(len ÷ 2, nthreads)
 
-    for i in 1:log2length
+    for i in 1:log2len
         m = 1 << i
         m2 = m >> 1
-        magic = 1 << (log2length - i)
-        theta_m = CuArray(powermod.(npruarray, Int(len / m), primearray))
+        magic = 1 << (log2len - i)
+        theta_m = CuArray(powermod.(npruArray, Int(len / m), primeArray))
         @cuda(
             threads = nthreads,
             blocks = nblocks,
@@ -160,10 +163,10 @@ function gpu_ntt_kernel!(vec, primearray, theta_m, magic, m2)
     return 
 end
 
-function build_result(multimodularResultArr::CuArray{Int, 2}, primearray::Vector{Int})
+function build_result(multimodularResultArr::CuArray{Int, 2}, primearray::Vector{Int}, resultType::DataType)
     @assert size(multimodularResultArr, 1) == length(primearray) "number of rows of input array and number of primes must be equal"
 
-    result = multimodularResultArr[1, :]
+    result = resultType.(multimodularResultArr[1, :])
 
     nthreads = min(512, length(result))
     nblocks = cld(length(result), nthreads)

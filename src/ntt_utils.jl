@@ -4,6 +4,22 @@ using Primes
 using BenchmarkTools
 using Dates
 
+# Also exists to guarantee positive mod numbers so my chinese remainder theorem
+# doesn't get messed up
+@inline function faster_mod(x::T, m::Integer) where T<:Integer
+    r = T(x - div(x, m) * m)
+    return r < 0 ? r + m : r
+end
+
+# sus = CuArray([
+#     10 20 30 40
+#     50 60 70 80
+# ])
+
+# sus[1, :] .= map(x -> faster_mod(x, 7), sus[1, :])
+# sus
+
+
 """
     find_ntt_primes(n)
 
@@ -27,7 +43,7 @@ function find_ntt_primes(n)
     return prime_list
 end
 
-# arr = find_ntt_primes(16384)
+# arr = find_ntt_primes(8388608)
 # print(arr[1:100])
 
 function get_ntt_length(numVars, prime)
@@ -38,14 +54,10 @@ function get_ntt_length(numVars, prime)
     return step1Length, step2Length
 end
 
-# println(get_ntt_length(4, 7))
-function npruarray_generator(primearray::Array, n)
+# println(get_ntt_length(4, 7)) -> (16384, 8388608)
+function npruarray_generator(primearray::Array{T}, n::T) where T<:Integer
     return map(p -> nth_principal_root_of_unity(n, p), primearray)
 end
-
-npruarray = [4, 9]
-primearray = [13, 11]
-
 
 function inverse_generator(npruarray::Array, primearray::Array)
     @assert length(npruarray) == length(primearray)
@@ -55,12 +67,8 @@ end
 # arr = find_ntt_primes(8192)
 # println(arr[1:100])
 
-# Also exists to guarantee positive mod numbers so my chinese remainder theorem
-# doesn't get messed up
-@inline function faster_mod(x, m)
-    r = Int(x - div(x, m) * m)
-    return r < 0 ? r + m : r
-end
+
+
 
 
 """
@@ -69,22 +77,21 @@ end
 Return n ^ p mod m. Only gives accurate results when
 m is prime, since uses fermat's little theorem
 """
-function power_mod(n, p, m)
+function power_mod(n::T, p::Integer, m::Integer) where T<:Integer
     result = 1
     p = faster_mod(p, m - 1)
     base = faster_mod(n, m)
 
     while p > 0
-        if p % 2 == 1
+        if p & 1 == 1
             result = faster_mod((result * base), m)
         end
-        base = (base * base) % m
-        p = div(p, 2)
+        base = faster_mod(base * base, m)
+        p = p >> 1
     end
 
     return result
 end
-
 
 
 """
@@ -92,7 +99,7 @@ end
 
 Return n^-1 mod p.
 """
-function mod_inverse(n::Int, p::Integer)
+function mod_inverse(n::Integer, p::Integer)
     @assert isprime(p)
     n = mod(n, p)
 
@@ -106,14 +113,14 @@ function mod_inverse(n::Int, p::Integer)
     end
 
     if t < 0
-        t = t + p
+        t += p
     end
 
     return t
 end
 
-function nth_principal_root_of_unity(n::Int, p::Int)
-    @assert (p - 1) % n == 0 "n must divide p-1"
+function nth_principal_root_of_unity(n::Integer, p::Integer)
+    @assert faster_mod(p - 1, n) == 0 "n must divide p-1"
 
     order = (p - 1) ÷ n
 
@@ -134,7 +141,7 @@ function nth_principal_root_of_unity(n::Int, p::Int)
     # Compute the n-th principal root of unity
     root_of_unity = power_mod(g, order, p)
     @assert root_of_unity > 0 "root_of_unity overflowed"
-    return root_of_unity
+    return typeof(n)(root_of_unity)
 end
 
 function parallelBitReverseCopy(p)

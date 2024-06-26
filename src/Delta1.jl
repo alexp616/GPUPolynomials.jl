@@ -15,47 +15,47 @@ end
 struct Delta1Pregen
     numVars::Int
     prime::Int
-    primeArray1::Vector{Int}
-    npruArray1::Vector{Int}
-    pregenButterfly1::CuVector{Int}
-    primeArray2::Vector{Int}
-    npruArray2::Vector{Int}
-    pregenButterfly2::CuVector{Int}
+    step1pregen::GPUPowPregen
+    step2pregen::GPUPowPregen
     inputLen1::Int
-    fftSize1::Int
     inputLen2::Int
-    fftSize2::Int
     key1::Int
     key2::Int
 end
 
 function pregen_delta1(numVars::Int, prime::Int)
     # TODO very temporary
-    @assert prime == 5 "I havent figured out upper bounds for other primes yet"
-    @assert numVars == 4 "I haven't figured out upper bounds for 5 variables yet"
     
-    # All of these as of now are prime numbers I hand-selected, 
-    # I can hand-select primes for primes > 5 when the time comes. Though FFT might slow down a bit
+    if (numVars == 4 && prime == 5)
+        primeArray1 = [2654209]
+        primeArray2 = [13631489, 23068673]
+        resultType1 = Int64
+        resultType2 = Int64
+    elseif (numVars == 4 && prime == 7)
+        primeArray1 = [65537, 114689, 147457]
+        primeArray2 = [167772161, 377487361, 469762049]
+        resultType1 = Int64
+        resultType2 = Int128
+    else
+        throw("I havent figured out these bounds yet")
+    end
+
     step1ResultDegree = numVars * (prime - 1)
-    # len1 stores the size of the input into CPUNTT
+    key1 = step1ResultDegree + 1
+
     inputLen1 = numVars * (step1ResultDegree + 1) ^ (numVars - 2) + 1
-    # fftSize1 stores the size of the output of CPUNTT
     fftSize1 = nextpow(2, (inputLen1 - 1) * (prime - 1) + 1)
-    primeArray1 = [2654209]
-    npruArray1 = npruarray_generator(primeArray1, fftSize1)
-    pregenButterfly1 = generate_butterfly_permutations(fftSize1)
+
+    step1Pregen = pregen_gpu_pow(primeArray = primeArray1, len = fftSize1, resultType = resultType1)
 
     step2ResultDegree = step1ResultDegree * prime
-    # len3 stores the size of the input into GPUNTT
+    key2 = step2ResultDegree + 1
     inputLen2 = step1ResultDegree * (step2ResultDegree + 1) ^ (numVars - 2) + 1
-    # primeArray2 = [330301441, 311427073]
-    primeArray2 = [13631489, 23068673]
-    # fftSize2 stores the size of the output of GPUNTT
     fftSize2 = nextpow(2, (inputLen2 - 1) * prime + 1)
-    npruArray2 = npruarray_generator(primeArray2, fftSize2)
-    pregenButterfly2 = generate_butterfly_permutations(fftSize2)
 
-    return Delta1Pregen(numVars, prime, primeArray1, npruArray1, pregenButterfly1, primeArray2, npruArray2, pregenButterfly2, inputLen1, fftSize1, inputLen2, fftSize2, step1ResultDegree + 1, step2ResultDegree + 1)
+    step2Pregen = pregen_gpu_pow(primeArray = primeArray2, len = fftSize2, resultType = resultType2)
+
+    return Delta1Pregen(numVars, prime, step1Pregen, step2Pregen, inputLen1, inputLen2, key1, key2)
 end
 
 
@@ -177,15 +177,15 @@ function delta1(hp::HomogeneousPolynomial, prime, pregen::Delta1Pregen)
 
     # Raising f ^ p - 1
     input1 = CuArray(kronecker_substitution(hp, prime - 1, pregen))
-    output1 = gpu_pow(input1, prime - 1; primearray = pregen.primeArray1, npruarray = pregen.npruArray1, len = pregen.fftSize1, pregenButterfly = pregen.pregenButterfly1)
+    output1 = gpu_pow(input1, prime - 1; pregen = pregen.step1pregen)
 
     # Reduce mod p
-    output1 .%= prime
+    output1 = map(num -> faster_mod(num, prime), output1)
 
     # Raising g ^ p
     input2 = CuArray(change_polynomial_encoding(output1, pregen))
 
-    output2 = gpu_pow(input2, prime; primearray = pregen.primeArray2, npruarray = pregen.npruArray2, len = pregen.fftSize2, pregenButterfly = pregen.pregenButterfly2)
+    output2 = gpu_pow(input2, prime; pregen = pregen.step2pregen)
 
     result = decode_kronecker_substitution(output2, pregen.key2, pregen.numVars, pregen.key2 - 1)
     return result
@@ -193,8 +193,32 @@ function delta1(hp::HomogeneousPolynomial, prime, pregen::Delta1Pregen)
     # Haven't added other steps yet
 end
 
+function generate_compositions(n, k, type::DataType = Int32)
+    compositions = zeros(type, binomial(n + k - 1, k - 1), k)
+    current_composition = zeros(type, k)
+    current_composition[1] = n
+    idx = 1
+    while true
+        compositions[idx, :] .= current_composition
+        idx += 1
+        v = current_composition[k]
+        if v == n
+            break
+        end
+        current_composition[k] = 0
+        j = k - 1
+        while 0 == current_composition[j]
+            j -= 1
+        end
+        current_composition[j] -= 1
+        current_composition[j + 1] = 1 + v
+    end
+
+    return compositions
+end
+
 function test_delta1()
-    coeffs = [1, 2, 3, 4]
+    coeffs = [1, 1, 1, 1]
     degrees = [
         4 0 0 0
         0 4 0 0
@@ -213,6 +237,10 @@ function test_delta1()
     println("Time to raise 4-variate polynomial to the 4th and 5th power for the first time: ")
     CUDA.@time result = delta1(polynomial, 5, pregen)
 
-    println("Time to raise different 4-variate polynomial to the 4th and 5th power: ")
-    @benchmark result2 = delta1(polynomial2, 5, pregen)
+    println("Time to raise different 4-variate polynomial to the 6th and 7th power: ")
+    for i in 1:10
+        println("Trial $i")
+        CUDA.@time result2 = delta1(polynomial2, 5, pregen)
+    end
+    
 end
