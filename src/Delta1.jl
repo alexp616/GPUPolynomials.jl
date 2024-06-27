@@ -148,6 +148,59 @@ function change_polynomial_encoding(p::Array{Int, 1}, pregen::Delta1Pregen)
     return result
 end
 
+"""
+cpu_remove_pth_power_terms!(big,small)
+
+Subtracts small .^ p from big as polynomials.
+
+Here's the idea: small already in kronecker order
+(we'll have to use decode_kronecker_substitution there, or else sort it)
+So loop through each of the terms of gpuOutput, keeping a counter on cpuOutput.
+When you find one that is the same, set it's coefficient to zero,
+increment the cpuOutput counter, and then continue
+By the end, we should have reached the end of both arrays.
+
+This will have time complexity O(nTerms(gpuOutput))
+
+This is really a modified version of Johnson's addition/subtraction algorithm. 
+Should be fast on the cpu
+
+Note that this means if the two polynomials don't have the same term order,
+this can fail.
+
+Arguments:
+big - HomogeneousPolynomial
+small - HomogeneousPolynomial
+p - power to remove terms from
+"""
+function cpu_remove_pth_power_terms!(big,small,p)
+    
+    i = 1
+    k = 1
+
+    while i ≤ length(small.coeffs)
+        # for a standard addition, remove the p
+        smalldegs = p .* small.degrees[i,:]
+
+
+        bigdegs = big.degrees[k,:]
+        while smalldegs != bigdegs
+            k = k + 1
+            bigdegs = big.degrees[k,:]
+        end
+        # now we know that the term in row k of big is a pth power of 
+        # the term in row i of small
+
+        # this is a subtraction
+        big.coeffs[k] -= (small.coeffs[i])^p
+
+        i = i + 1
+    end
+
+    nothing
+end
+
+
 function delta1(hp::HomogeneousPolynomial, prime, pregen::Delta1Pregen)
     @assert prime == pregen.prime && size(hp.degrees, 2) == pregen.numVars "Current pregen isn't compatible with input"
 
@@ -164,30 +217,75 @@ function delta1(hp::HomogeneousPolynomial, prime, pregen::Delta1Pregen)
     gpuInput = CuArray(change_polynomial_encoding(cpuOutput, pregen))
     gpuOutput = GPUPow(gpuInput, prime; primearray = pregen.gpuPrimeArray, npruarray = pregen.gpuNpruArray, len = pregen.gpuOutputLen, pregenButterfly = pregen.gpuPregenButterfly)
 
-    result = decode_kronecker_substitution(gpuOutput, pregen.key2, pregen.numVars, pregen.key2 - 1)
-    return result
 
-    # Haven't added other steps yet
+    result = decode_kronecker_substitution(gpuOutput, pregen.key2, pregen.numVars, pregen.key2 - 1)
+
+    println("Before subtracting at 2877: $(result.coeffs[2877]), $(result.degrees[2877,:])")
+    
+    # for now, do the rest of the steps on the cpu
+    # TODO: uncomment this after fixing the bug
+    
+    #intermediate = decode_kronecker_substitution(CuArray(cpuOutput), pregen.key1, pregen.numVars, pregen.key1 - 1)
+    #cpu_remove_pth_power_terms!(result,intermediate,prime)
+
+    ##result.coeffs = divexact.(result.coeffs,5)
+
+    #for i in 1:length(result.coeffs)
+    #    i == 2877 && println("$i: $(result.coeffs[i]), $(result.degrees[i,:])")
+    #    result.coeffs[i] = divexact(result.coeffs[i],5)
+    #end
+    #result.coeffs .%= prime
+
+    #return (intermediate, result, finalresult
+    result
 end
 
-coeffs = [1, 2, 3, 4]
-degrees = [
-    4 0 0 0
-    0 4 0 0
-    0 0 4 0
-    0 0 0 4
-]
+function test_delta1()
 
-degrees2 = [4 0 0 0; 3 1 0 0; 3 0 1 0; 3 0 0 1; 2 2 0 0; 2 1 1 0; 2 1 0 1; 2 0 2 0; 2 0 1 1; 2 0 0 2; 1 3 0 0; 1 2 1 0; 1 2 0 1; 1 1 2 0; 1 1 1 1; 1 1 0 2; 1 0 3 0; 1 0 2 1; 1 0 1 2; 1 0 0 3; 0 4 0 0; 0 3 1 0; 0 3 0 1; 0 2 2 0; 0 2 1 1; 0 2 0 2; 0 1 3 0; 0 1 2 1; 0 1 1 2; 0 1 0 3; 0 0 4 0; 0 0 3 1; 0 0 2 2; 0 0 1 3; 0 0 0 4]
-coeffs2 = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+    coeffs = [1, 2, 3, 4]
+    degrees = [
+        4 0 0 0
+        0 4 0 0
+        0 0 4 0
+        0 0 0 4
+    ]
+    
+    degrees2 = [4 0 0 0; 3 1 0 0; 3 0 1 0; 3 0 0 1; 2 2 0 0; 2 1 1 0; 2 1 0 1; 2 0 2 0; 2 0 1 1; 2 0 0 2; 1 3 0 0; 1 2 1 0; 1 2 0 1; 1 1 2 0; 1 1 1 1; 1 1 0 2; 1 0 3 0; 1 0 2 1; 1 0 1 2; 1 0 0 3; 0 4 0 0; 0 3 1 0; 0 3 0 1; 0 2 2 0; 0 2 1 1; 0 2 0 2; 0 1 3 0; 0 1 2 1; 0 1 1 2; 0 1 0 3; 0 0 4 0; 0 0 3 1; 0 0 2 2; 0 0 1 3; 0 0 0 4]
+    coeffs2 = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+    
+    polynomial = HomogeneousPolynomial(coeffs, degrees)
+    polynomial2 = HomogeneousPolynomial(coeffs2, degrees2)
+    
+    pregen = pregen_delta1(4, 5)
+    
+    println("Time to raise 4-variate polynomial to the 4th and 5th power for the first time: ")
+    CUDA.@time result = delta1(polynomial, 5, pregen)
+    
+    #println(length(result.coeffs))
+    
 
-polynomial = HomogeneousPolynomial(coeffs, degrees)
-polynomial2 = HomogeneousPolynomial(coeffs2, degrees2)
+    println("Time to raise different 4-variate polynomial to the 4th and 5th power: ")
+    CUDA.@time result2 = delta1(polynomial2, 5, pregen)
 
-pregen = pregen_delta1(4, 5)
+    #println(length(result2.coeffs))
 
-println("Time to raise 4-variate polynomial to the 4th and 5th power for the first time: ")
-CUDA.@time result = delta1(polynomial, 5, pregen)
+    return (result, result2)
+end
 
-println("Time to raise different 4-variate polynomial to the 4th and 5th power: ")
-CUDA.@time result2 = delta1(polynomial2, 5, pregen)
+function test_bug()
+
+    coeffs = [4, 4, 4, 2, 4, 3, 1]
+    degrees = [2 1 1 0; 0 3 1 0; 0 0 4 0; 1 1 1 1; 0 1 2 1; 0 2 0 2; 0 0 1 3]
+
+    polynomial = HomogeneousPolynomial(coeffs, degrees)
+
+    pregen = pregen_delta1(4,5)
+
+    result = delta1(polynomial,5,pregen)
+
+    println(result.coeffs[2877])
+    println(result.degrees[2877,:]) # shouldb e [11, 29, 15, 25]
+
+    @assert result.coeffs[2877] == 315105550
+
+end
