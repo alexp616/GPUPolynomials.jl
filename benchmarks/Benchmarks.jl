@@ -2,7 +2,8 @@ module Benchmarks
 
 using Oscar
 
-include("../experimental stuff/TrivialMultiply.jl")
+# include("../experimental stuff/TrivialMultiply.jl")
+include("../src/Delta1.jl")
 
 # for the Meta.parse thing to work, these have to be global varibles
 # admittedly, this is a bit of a hack.
@@ -36,61 +37,62 @@ function convert_to_gpu_representation(p)
 end
 
 function benchmarks_oscar()
-  polys = read_benchmarks()
+    polys = read_benchmarks()
 
-  # prime the jitter
-  println("PRIMING THE JITTER:")
-  @time polys[1]^4
-  lift1 = lift_to_ZZ(polys[1])
-  @time lift1^5
+    function oscar_delta1(poly, prime)
+        intermed_term = poly^4
+        lifted = lift_to_ZZ(intermed_term)
+        return lifted ^ 5
+    end
+    # prime the jitter
+    println("PRIMING THE JITTER:")
+    @time polys[1]^4
+    lift1 = lift_to_ZZ(polys[1])
+    @time lift1^5
 
-  answers = []
-  
-  println("TESTING:")
-  i = 1
-  for p in polys
-    println("Benchmark $i:")
-    i = i + 1
+    answers = []
+    
+    println("TESTING:")
+    i = 1
+    for p in polys
+        println("Benchmark $i:")
+        i = i + 1
 
-    @time intermed_term = p^4
+        @time answer = oscar_delta1(p, 5)
 
-    lifted = lift_to_ZZ(intermed_term)
+        push!(answers,answer)
+    end
 
-    @time answer = lifted^5
-    push!(answers,answer)
-  end
-
-  answers
+    answers
 end
 
 function benchmarks_gpu()
-  polys = read_benchmarks()
-  gpu_data = convert_to_gpu_representation.(polys)
+    polys = read_benchmarks()
+    gpu_data = convert_to_gpu_representation.(polys)
 
-  # prime the jitter
-  println("PRIMING THE JITTER:")
-  h = PolynomialModule.HostPolynomial(gpu_data[1][1],gpu_data[1][2])
-  CUDA.@time raise_to_power(h,4,5)
+    pregen = pregen_delta1(4, 5)
 
-  CUDA.@time raise_to_power(h,5)
+    # prime the jitter
+    println("PRIMING THE JITTER:")
+    h = HomogeneousPolynomial(gpu_data[1][1],gpu_data[1][2])
 
-  answers = []
+    CUDA.@time delta1(h, 5, pregen)
+
+    answers = []
   
-  println("TESTING:")
-  i = 1
-  for data in gpu_data 
-    println("Benchmark $i:")
-    i = i + 1
-    
-    p = PolynomialModule.HostPolynomial(data[1],data[2],81) # 81 = 4*4*5 + 1
+    println("TESTING:")
+    i = 1
+    for data in gpu_data 
+        println("Benchmark $i:")
+        i = i + 1
+        
+        p = HomogeneousPolynomial(data[1],data[2])
 
-    CUDA.@time intermed_term = raise_to_power(p,4,5)
+        CUDA.@time answer = delta1(p, 5, pregen)
+        push!(answers,answer)
+    end
 
-    CUDA.@time answer = raise_to_power(intermed_term,5)
-    push!(answers,answer)
-  end
-
-  answers
+    answers
 end
 
 function run_all_benchmarks()
@@ -98,7 +100,7 @@ function run_all_benchmarks()
   println("--------------GPU-------------")
   benchmarks_gpu()
   println("-------------Oscar------------")
-  benchmarks_oscar()
+#   benchmarks_oscar()
 
   nothing # don't spam the terminal
 end

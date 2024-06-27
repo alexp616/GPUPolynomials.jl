@@ -12,6 +12,7 @@
 \usepackage{parskip}
 \usepackage{wasysym}
 \usepackage{adjustbox}
+\usepackage{array}
 
 \begin{document}
 
@@ -38,7 +39,7 @@ If we want to raise a polynomial to a power, we can simply DFT to get $\hat{f}$,
 
 This should be much faster than the repeated squaring method; this method only requires one DFT to be evaluated, and raising each component to a power in parallel should be effectively instant. In contrast to $log_2(p)$ different DFTs
 
-Proofs for correctness of computed numbers:
+\section*{Proofs for correctness of computed numbers:}
 
 Because the GPU doesn't report when an integer datatype overflows, we need to verify that the numbers the algorithm returns are actually correct, and less than $2^{64}$.
 
@@ -64,6 +65,15 @@ We are interested in two steps: raising $g = f^{p - 1}\mod p$ for primes $p$, an
     If $f$ is a polynomial of 4 variables, and it has been raised to the $p-1$ and taken mod $p$, then the greatest coefficient of $g$ is $p-1$, and $g$ is homogeneous with degree $4 * p$. This gives the upper bound $(p - 1)^{p} \cdot \binom{4p + 4 - 1}{4 - 1}^{p}$. For $p=5$, this evaluates to $1.00733564 \cdot 10^{17}$, which is less than $2^{64} - 1$, or $1.84467441 \cdot 10^{19}$. So, for the case of 4 variables, and $p = 5$, Int64's can be used without having to worry about overflowing.
 \end{itemize}
 
+Update 6/24:
+Instead of all of that, I could've just calculated the maximum coefficient using some programming
+
+Table of bounds for first step
+
+
+\end{document}
+
+Theorem: (put 20,20,20,20 proof here)
 
 \end{document}
 

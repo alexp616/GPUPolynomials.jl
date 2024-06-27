@@ -2,12 +2,12 @@ include("gpu_ntt_pow.jl")
 include("cpu_ntt_pow.jl")
 
 mutable struct HomogeneousPolynomial
-    coeffs::Array{Int, 1}
+    coeffs::Vector{Int}
     degrees::Array{Int, 2}
     homogeneousDegree::Int
 end
 
-function HomogeneousPolynomial(coeffs::Array{Int, 1}, degrees::Array{Int, 2})
+function HomogeneousPolynomial(coeffs::Vector{Int}, degrees::Array{Int, 2})
     @assert length(coeffs) == size(degrees, 1)
     return HomogeneousPolynomial(coeffs, degrees, sum(degrees[1, :]))
 end
@@ -15,52 +15,54 @@ end
 struct Delta1Pregen
     numVars::Int
     prime::Int
-    cpuPrime::Int
-    cpuNpru::Int
-    cpuPregenButterfly::Array{Int, 1}
-    gpuPrimeArray::Array{Int, 1}
-    gpuNpruArray::Array{Int, 1}
-    gpuPregenButterfly::CuArray{Int, 1}
-    cpuInputLen::Int
-    cpuOutputLen::Int
-    gpuInputLen::Int
-    gpuOutputLen::Int
+    step1pregen::GPUPowPregen
+    step2pregen::GPUPowPregen
+    inputLen1::Int
+    inputLen2::Int
     key1::Int
     key2::Int
 end
 
 function pregen_delta1(numVars::Int, prime::Int)
     # TODO very temporary
-    @assert prime == 5 "I havent figured out upper bounds for other primes yet"
-    @assert numVars == 4 "I haven't figured out upper bounds for 5 variables yet"
     
-    # All of these as of now are prime numbers I hand-selected, 
-    # I can hand-select primes for primes > 5 when the time comes. Though FFT might slow down a bit
+    if (numVars == 4 && prime == 5)
+        primeArray1 = [2654209]
+        primeArray2 = [13631489, 23068673]
+        resultType1 = Int64
+        resultType2 = Int64
+    elseif (numVars == 4 && prime == 7)
+        primeArray1 = [65537, 114689, 147457]
+        primeArray2 = [167772161, 377487361, 469762049]
+        resultType1 = Int64
+        resultType2 = Int128
+    else
+        throw("I havent figured out these bounds yet")
+    end
+
     step1ResultDegree = numVars * (prime - 1)
-    # len1 stores the size of the input into CPUNTT
-    cpuInputLen = numVars * (step1ResultDegree + 1) ^ (numVars - 2) + 1
-    # cpuOutputLen stores the size of the output of CPUNTT
-    cpuOutputLen = nextpow(2, (cpuInputLen - 1) * (prime - 1) + 1)
-    cpuPrime = 2654209
-    cpuNpru = nth_principal_root_of_unity(cpuOutputLen, 2654209)
-    cpuPregenButterfly = Array(generate_butterfly_permutations(cpuOutputLen))
+    key1 = step1ResultDegree + 1
+
+    inputLen1 = numVars * (step1ResultDegree + 1) ^ (numVars - 2) + 1
+    fftSize1 = nextpow(2, (inputLen1 - 1) * (prime - 1) + 1)
+
+    step1Pregen = pregen_gpu_pow(primeArray = primeArray1, len = fftSize1, resultType = resultType1)
 
     step2ResultDegree = step1ResultDegree * prime
-    # len3 stores the size of the input into GPUNTT
-    gpuInputLen = step1ResultDegree * (step2ResultDegree + 1) ^ (numVars - 2) + 1
-    primearray2 = [330301441, 311427073]
-    # gpuOutputLen stores the size of the output of GPUNTT
-    gpuOutputLen = nextpow(2, (gpuInputLen - 1) * prime + 1)
-    npruarray2 = npruarray_generator(primearray2, gpuOutputLen)
-    gpu_pregenButterfly = generate_butterfly_permutations(gpuOutputLen)
+    key2 = step2ResultDegree + 1
+    inputLen2 = step1ResultDegree * (step2ResultDegree + 1) ^ (numVars - 2) + 1
+    fftSize2 = nextpow(2, (inputLen2 - 1) * prime + 1)
 
-    return Delta1Pregen(numVars, prime, cpuPrime, cpuNpru, cpuPregenButterfly, primearray2, npruarray2, gpu_pregenButterfly, cpuInputLen, cpuOutputLen, gpuInputLen, gpuOutputLen, step1ResultDegree + 1, step2ResultDegree + 1)
+    step2Pregen = pregen_gpu_pow(primeArray = primeArray2, len = fftSize2, resultType = resultType2)
+
+    return Delta1Pregen(numVars, prime, step1Pregen, step2Pregen, inputLen1, inputLen2, key1, key2)
 end
 
-function kronecker_substitution(hp::HomogeneousPolynomial, pow::Int, pregen::Delta1Pregen)::Array{Int, 1}
+
+function kronecker_substitution(hp::HomogeneousPolynomial, pow::Int, pregen::Delta1Pregen)::Vector{Int}
     key = hp.homogeneousDegree * pow + 1
 
-    result = zeros(Int, pregen.cpuInputLen)
+    result = zeros(Int, pregen.inputLen1)
     for termidx in eachindex(hp.coeffs)
         # encoded = 1 because julia 1-indexing
         encoded = 1
@@ -137,13 +139,26 @@ function change_encoding(num::Int, e1::Int, e2::Int, numValues::Int)
     return result
 end
 
-function change_polynomial_encoding(p::Array{Int, 1}, pregen::Delta1Pregen)
-    result = zeros(Int, pregen.gpuInputLen)
-    for i in eachindex(p)
-        if p[i] != 0
-            result[change_encoding(i - 1, pregen.key1, pregen.key2, pregen.numVars - 1) + 1] = p[i]
-        end
+function change_polynomial_encoding(p::CuVector{Int}, pregen::Delta1Pregen)
+    result = CUDA.zeros(Int, pregen.inputLen2)
+
+    nthreads = min(512, length(p))
+    nblocks = fld(length(p), nthreads)
+    lastBlockThreads = length(p) - nthreads * nblocks
+
+    if lastBlockThreads > 0
+        @cuda(
+            threads = lastBlockThreads,
+            blocks = 1,
+            change_polynomial_encoding_kernel(p, result, pregen.key1, pregen.key2, pregen.numVars, nthreads * nblocks)
+        )
     end
+
+    @cuda(
+        threads = nthreads,
+        blocks = nblocks,
+        change_polynomial_encoding_kernel(p, result, pregen.key1, pregen.key2, pregen.numVars)
+    )
 
     return result
 end
@@ -201,77 +216,107 @@ function cpu_remove_pth_power_terms!(big,small,p)
 end
 
 
+function change_polynomial_encoding_kernel(source, dest, key1, key2, numVars, offset = 0)
+    tid = threadIdx().x + (blockIdx().x - 1) * blockDim().x + offset
+
+    resultidx = change_encoding(tid - 1, key1, key2, numVars - 1) + 1
+    dest[resultidx] = source[tid]
+
+    return
+end
+
 function delta1(hp::HomogeneousPolynomial, prime, pregen::Delta1Pregen)
     @assert prime == pregen.prime && size(hp.degrees, 2) == pregen.numVars "Current pregen isn't compatible with input"
 
     # Raising f ^ p - 1
-    cpuInput = kronecker_substitution(hp, prime - 1, pregen)
-    cpuOutput = cpu_pow(cpuInput, prime - 1; prime = pregen.cpuPrime, npru = pregen.cpuNpru, len = pregen.cpuOutputLen, pregenButterfly = pregen.cpuPregenButterfly)
+    input1 = CuArray(kronecker_substitution(hp, prime - 1, pregen))
+    output1 = gpu_pow(input1, prime - 1; pregen = pregen.step1pregen)
 
     # Reduce mod p
-    cpuOutput .%= prime
-
-    # println("CPU part took $(now() - start_time)")
+    output1 = map(num -> faster_mod(num, prime), output1)
 
     # Raising g ^ p
-    gpuInput = CuArray(change_polynomial_encoding(cpuOutput, pregen))
-    gpuOutput = GPUPow(gpuInput, prime; primearray = pregen.gpuPrimeArray, npruarray = pregen.gpuNpruArray, len = pregen.gpuOutputLen, pregenButterfly = pregen.gpuPregenButterfly)
+    input2 = CuArray(change_polynomial_encoding(output1, pregen))
 
+    output2 = gpu_pow(input2, prime; pregen = pregen.step2pregen)
 
-    result = decode_kronecker_substitution(gpuOutput, pregen.key2, pregen.numVars, pregen.key2 - 1)
+    result = decode_kronecker_substitution(output2, pregen.key2, pregen.numVars, pregen.key2 - 1)
+    #return result
+
 
     println("Before subtracting at 2877: $(result.coeffs[2877]), $(result.degrees[2877,:])")
     
     # for now, do the rest of the steps on the cpu
     # TODO: uncomment this after fixing the bug
     
-    #intermediate = decode_kronecker_substitution(CuArray(cpuOutput), pregen.key1, pregen.numVars, pregen.key1 - 1)
-    #cpu_remove_pth_power_terms!(result,intermediate,prime)
+    intermediate = decode_kronecker_substitution(output1, pregen.key1, pregen.numVars, pregen.key1 - 1)
+    cpu_remove_pth_power_terms!(result,intermediate,prime)
 
-    ##result.coeffs = divexact.(result.coeffs,5)
 
-    #for i in 1:length(result.coeffs)
-    #    i == 2877 && println("$i: $(result.coeffs[i]), $(result.degrees[i,:])")
-    #    result.coeffs[i] = divexact(result.coeffs[i],5)
-    #end
-    #result.coeffs .%= prime
+    for i in 1:length(result.coeffs)
+        println("$i: $(result.coeffs[i]), $(result.degrees[i,:])")
+        result.coeffs[i] .% 5 != 0 && println("WRONG COEFFICIENT: $i")
+        result.coeffs[i] = divexact(result.coeffs[i],5)
+    end
+
+    #result.coeffs = divexact.(result.coeffs,5)
+    result.coeffs .%= prime
 
     #return (intermediate, result, finalresult
     result
 end
 
-function test_delta1()
+function generate_compositions(n, k, type::DataType = Int32)
+    compositions = zeros(type, binomial(n + k - 1, k - 1), k)
+    current_composition = zeros(type, k)
+    current_composition[1] = n
+    idx = 1
+    while true
+        compositions[idx, :] .= current_composition
+        idx += 1
+        v = current_composition[k]
+        if v == n
+            break
+        end
+        current_composition[k] = 0
+        j = k - 1
+        while 0 == current_composition[j]
+            j -= 1
+        end
+        current_composition[j] -= 1
+        current_composition[j + 1] = 1 + v
+    end
 
-    coeffs = [1, 2, 3, 4]
+    return compositions
+end
+
+function test_delta1()
+    coeffs = [1, 1, 1, 1]
     degrees = [
         4 0 0 0
         0 4 0 0
         0 0 4 0
         0 0 0 4
     ]
-    
+
     degrees2 = [4 0 0 0; 3 1 0 0; 3 0 1 0; 3 0 0 1; 2 2 0 0; 2 1 1 0; 2 1 0 1; 2 0 2 0; 2 0 1 1; 2 0 0 2; 1 3 0 0; 1 2 1 0; 1 2 0 1; 1 1 2 0; 1 1 1 1; 1 1 0 2; 1 0 3 0; 1 0 2 1; 1 0 1 2; 1 0 0 3; 0 4 0 0; 0 3 1 0; 0 3 0 1; 0 2 2 0; 0 2 1 1; 0 2 0 2; 0 1 3 0; 0 1 2 1; 0 1 1 2; 0 1 0 3; 0 0 4 0; 0 0 3 1; 0 0 2 2; 0 0 1 3; 0 0 0 4]
     coeffs2 = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
-    
+
     polynomial = HomogeneousPolynomial(coeffs, degrees)
     polynomial2 = HomogeneousPolynomial(coeffs2, degrees2)
-    
+
     pregen = pregen_delta1(4, 5)
-    
+
     println("Time to raise 4-variate polynomial to the 4th and 5th power for the first time: ")
     CUDA.@time result = delta1(polynomial, 5, pregen)
-    
-    #println(length(result.coeffs))
-    
 
-    println("Time to raise different 4-variate polynomial to the 4th and 5th power: ")
-    CUDA.@time result2 = delta1(polynomial2, 5, pregen)
-
-    #println(length(result2.coeffs))
-
-    return (result, result2)
+    println("Time to raise different 4-variate polynomial to the 6th and 7th power: ")
+    for i in 1:10
+        println("Trial $i")
+        CUDA.@time result2 = delta1(polynomial2, 5, pregen)
+    end
 end
-
+    
 function test_bug()
 
     coeffs = [4, 4, 4, 2, 4, 3, 1]
@@ -287,5 +332,7 @@ function test_bug()
     println(result.degrees[2877,:]) # shouldb e [11, 29, 15, 25]
 
     @assert result.coeffs[2877] == 315105550
+    @assert result.coeffis[1040] == 24352765
 
 end
+
