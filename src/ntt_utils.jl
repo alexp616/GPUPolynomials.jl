@@ -45,10 +45,7 @@ function div(n::Int128, m::Int128)
         return Int128(0)
     end
 
-    sign = 1
-    if (n < 0) != (m < 0)
-        sign = -1
-    end
+    signbit(n) ⊻ signbit(m) ? sign = -1 : sign = 1
 
     n = abs(n)
     m = abs(m)
