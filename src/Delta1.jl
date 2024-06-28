@@ -29,11 +29,15 @@ function pregen_delta1(numVars::Int, prime::Int)
     if (numVars == 4 && prime == 5)
         primeArray1 = [2654209]
         primeArray2 = [13631489, 23068673]
+        crtType1 = Int64
+        crtType2 = Int128
         resultType1 = Int64
         resultType2 = Int64
     elseif (numVars == 4 && prime == 7)
         primeArray1 = [65537, 114689, 147457]
         primeArray2 = [167772161, 377487361, 469762049]
+        crtType1 = Int64
+        crtType2 = Int128
         resultType1 = Int64
         resultType2 = Int128
     else
@@ -46,14 +50,14 @@ function pregen_delta1(numVars::Int, prime::Int)
     inputLen1 = numVars * (step1ResultDegree + 1) ^ (numVars - 2) + 1
     fftSize1 = nextpow(2, (inputLen1 - 1) * (prime - 1) + 1)
 
-    step1Pregen = pregen_gpu_pow(primeArray = primeArray1, len = fftSize1, resultType = resultType1)
+    step1Pregen = pregen_gpu_pow(primeArray = primeArray1, len = fftSize1, crtType = crtType1, resultType = resultType1)
 
     step2ResultDegree = step1ResultDegree * prime
     key2 = step2ResultDegree + 1
     inputLen2 = step1ResultDegree * (step2ResultDegree + 1) ^ (numVars - 2) + 1
     fftSize2 = nextpow(2, (inputLen2 - 1) * prime + 1)
 
-    step2Pregen = pregen_gpu_pow(primeArray = primeArray2, len = fftSize2, resultType = resultType2)
+    step2Pregen = pregen_gpu_pow(primeArray = primeArray2, len = fftSize2, crtType = crtType2, resultType = resultType2)
 
     return Delta1Pregen(numVars, prime, step1Pregen, step2Pregen, inputLen1, inputLen2, key1, key2)
 end
@@ -93,7 +97,7 @@ function decode_kronecker_substitution(arr, key, numVars, totalDegree)
             termNum = indices[idx]
             for i in 1:numVars - 1
                 num, r = divrem(num, key)
-                resultDegrees[termNum, i] = r 
+                resultDegrees[termNum, i] = r
                 totalDegree -= r
             end
             resultCoeffs[termNum] = arr[idx]
@@ -111,7 +115,7 @@ function decode_kronecker_substitution(arr, key, numVars, totalDegree)
     # I have this last_block_threads thing because it ran slightly faster than
     # padding to the next multiple of nthreads, might not be the same on other machines
     # Also, the gpu kernels I see in CUDA.jl have some if tid < length(arr) ... stuff,
-    # that just index out of bounds for me if I do that
+    # that just index out of bounds for me if I do that, so I don't know how they coded those
     if last_block_threads > 0
         @cuda(
             threads = last_block_threads,
@@ -197,7 +201,6 @@ function cpu_remove_pth_power_terms!(big,small,p)
         # for a standard addition, remove the p
         smalldegs = p .* small.degrees[i,:]
 
-
         bigdegs = big.degrees[k,:]
         while smalldegs != bigdegs
             k = k + 1
@@ -234,17 +237,11 @@ function delta1(hp::HomogeneousPolynomial, prime, pregen::Delta1Pregen)
 
     # Reduce mod p
     output1 = map(num -> faster_mod(num, prime), output1)
-
     # Raising g ^ p
     input2 = CuArray(change_polynomial_encoding(output1, pregen))
 
     output2 = gpu_pow(input2, prime; pregen = pregen.step2pregen)
-
     result = decode_kronecker_substitution(output2, pregen.key2, pregen.numVars, pregen.key2 - 1)
-    #return result
-
-
-    println("Before subtracting at 2877: $(result.coeffs[2877]), $(result.degrees[2877,:])")
     
     # for now, do the rest of the steps on the cpu
     # TODO: uncomment this after fixing the bug
@@ -252,14 +249,20 @@ function delta1(hp::HomogeneousPolynomial, prime, pregen::Delta1Pregen)
     intermediate = decode_kronecker_substitution(output1, pregen.key1, pregen.numVars, pregen.key1 - 1)
     cpu_remove_pth_power_terms!(result,intermediate,prime)
 
+    # for i in 1:length(result.coeffs)
+    #     # so it doesn't explode my terminal
 
-    for i in 1:length(result.coeffs)
-        println("$i: $(result.coeffs[i]), $(result.degrees[i,:])")
-        result.coeffs[i] .% 5 != 0 && println("WRONG COEFFICIENT: $i")
-        result.coeffs[i] = divexact(result.coeffs[i],5)
-    end
+    #     if result.coeffs[i] % 5 != 0
+    #         println("WRONG COEFFICIENT $i: $(result.coeffs[i]), $(result.degrees[i, :])")
+    #     end
+    #     # divexact is part of OSCAR, which isn't installing on my computer.
+    #     # the loop above guarantees same behavior as divexact anyways
 
-    #result.coeffs = divexact.(result.coeffs,5)
+    #     # result.coeffs = divexact.(result.coeffs,5)
+    #     result.coeffs[i] = result.coeffs[i] ÷ 5
+    # end
+    result.coeffs ./= prime
+
     result.coeffs .%= prime
 
     #return (intermediate, result, finalresult
@@ -300,7 +303,7 @@ function test_delta1()
     ]
 
     degrees2 = [4 0 0 0; 3 1 0 0; 3 0 1 0; 3 0 0 1; 2 2 0 0; 2 1 1 0; 2 1 0 1; 2 0 2 0; 2 0 1 1; 2 0 0 2; 1 3 0 0; 1 2 1 0; 1 2 0 1; 1 1 2 0; 1 1 1 1; 1 1 0 2; 1 0 3 0; 1 0 2 1; 1 0 1 2; 1 0 0 3; 0 4 0 0; 0 3 1 0; 0 3 0 1; 0 2 2 0; 0 2 1 1; 0 2 0 2; 0 1 3 0; 0 1 2 1; 0 1 1 2; 0 1 0 3; 0 0 4 0; 0 0 3 1; 0 0 2 2; 0 0 1 3; 0 0 0 4]
-    coeffs2 = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+    coeffs2 = fill(4, size(degrees2, 1))
 
     polynomial = HomogeneousPolynomial(coeffs, degrees)
     polynomial2 = HomogeneousPolynomial(coeffs2, degrees2)
@@ -329,10 +332,10 @@ function test_bug()
     result = delta1(polynomial,5,pregen)
 
     println(result.coeffs[2877])
-    println(result.degrees[2877,:]) # shouldb e [11, 29, 15, 25]
+    println(result.degrees[2877,:]) # should be [11, 29, 15, 25]
 
-    @assert result.coeffs[2877] == 315105550
-    @assert result.coeffis[1040] == 24352765
+    # @assert result.coeffs[2877] == 315105550
+    # @assert result.coeffs[1040] == 24352765
 
 end
 

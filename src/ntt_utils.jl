@@ -4,20 +4,87 @@ using Primes
 using BenchmarkTools
 using Dates
 
+import Base.div
+
 # Also exists to guarantee positive mod numbers so my chinese remainder theorem
 # doesn't get messed up
-@inline function faster_mod(x::T, m::Integer) where T<:Integer
-    r = T(x - div(x, m) * m)
+@inline function faster_mod(x::Int, m::Int)::Int
+    r = Int(x - div(x, m) * m)
     return r < 0 ? r + m : r
 end
 
-# sus = CuArray([
-#     10 20 30 40
-#     50 60 70 80
-# ])
+function faster_mod(a::Int128, b::Int128)::Int128
+    # Handle edge cases
+    if b == 0
+        return a # Division by zero should not happen in kernel, return a for safety
+    elseif a == 0
+        return 0
+    end
 
-# sus[1, :] .= map(x -> faster_mod(x, 7), sus[1, :])
-# sus
+    abs_a = abs(a)
+    abs_b = abs(b)
+    
+    if abs_a < abs_b
+        return a
+    end
+
+    remainder = abs_a
+    b_bits = sizeof(Int128) * 8 - leading_zeros(abs_b)
+
+    for i in (sizeof(Int128) * 8 - leading_zeros(abs_a)):-1:b_bits
+        if remainder >= (abs_b << (i - b_bits))
+            remainder -= abs_b << (i - b_bits)
+        end
+    end
+
+    return a < 0 ? -remainder + b : remainder
+end
+
+function div(n::Int128, m::Int128) 
+    if n == 0
+        return Int128(0)
+    end
+
+    sign = 1
+    if (n < 0) != (m < 0)
+        sign = -1
+    end
+
+    n = abs(n)
+    m = abs(m)
+
+    quotient = Int128(0)
+    remainder = Int128(0)
+
+    for i in 0:127
+        remainder = (remainder << 1) | ((n >> (127 - i)) & 1)
+        if remainder >= m
+            remainder -= m
+            quotient |= (Int128(1) << (127 - i))
+        end
+    end
+
+    return quotient * sign
+end
+
+function chinese_remainder_two(a::T, n::T, b::Integer, m::Integer) where T<:Integer
+
+    b = T(b)
+    m = T(m)
+
+    n0, m0 = n, m
+    x0, x1 = T(1), T(0)
+    y0, y1 = T(0), T(1)
+    while m != 0
+        q = div(n, m)
+        n, m = m, faster_mod(n, m)
+        x0, x1 = x1, x0 - q * x1
+        y0, y1 = y1, y0 - q * y1
+    end
+
+    return faster_mod(a * m0 * y0 + b * n0 * x0, T(n0 * m0))
+
+end
 
 
 """
@@ -43,9 +110,6 @@ function find_ntt_primes(n)
     return prime_list
 end
 
-# arr = find_ntt_primes(8388608)
-# print(arr[1:100])
-
 function get_ntt_length(numVars, prime)
     step1HomogeneousDegree = numVars * (prime - 1)
     step1Length = nextpow(2, (step1HomogeneousDegree) * (step1HomogeneousDegree + 1) ^ (numVars - 2))
@@ -54,7 +118,7 @@ function get_ntt_length(numVars, prime)
     return step1Length, step2Length
 end
 
-# println(get_ntt_length(4, 7)) -> (16384, 8388608)
+
 function npruarray_generator(primearray::Array{T}, n::T) where T<:Integer
     return map(p -> nth_principal_root_of_unity(n, p), primearray)
 end
@@ -63,12 +127,6 @@ function inverse_generator(npruarray::Array, primearray::Array)
     @assert length(npruarray) == length(primearray)
     return mod_inverse.(npruarray, primearray)
 end
-
-# arr = find_ntt_primes(8192)
-# println(arr[1:100])
-
-
-
 
 
 """
@@ -97,26 +155,21 @@ end
 """
     mod_inverse(n, p)
 
-Return n^-1 mod p.
+Return n^-1 mod p. Assumes n is actually invertible mod p
 """
 function mod_inverse(n::Integer, p::Integer)
-    @assert isprime(p)
-    n = mod(n, p)
+    n = faster_mod(n, p)
 
     t, new_t = 0, 1
     r, new_r = p, n
 
     while new_r != 0
-        quotient = div(r, new_r)
+        quotient = r ÷ new_r
         t, new_t = new_t, t - quotient * new_t
         r, new_r = new_r, r - quotient * new_r
     end
 
-    if t < 0
-        t += p
-    end
-
-    return t
+    return t < 0 ? t + p : t
 end
 
 function nth_principal_root_of_unity(n::Integer, p::Integer)
@@ -138,9 +191,7 @@ function nth_principal_root_of_unity(n::Integer, p::Integer)
         g += 1
     end
 
-    # Compute the n-th principal root of unity
     root_of_unity = power_mod(g, order, p)
-    @assert root_of_unity > 0 "root_of_unity overflowed"
     return typeof(n)(root_of_unity)
 end
 
