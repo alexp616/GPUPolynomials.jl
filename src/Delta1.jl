@@ -1,17 +1,47 @@
 include("gpu_ntt_pow.jl")
-include("cpu_ntt_pow.jl")
 
+"""
+    HomogeneousPolynomial
+
+Struct that represents a homogeneous polynomial. Does nothing to check that the terms
+are actually homogeneous.
+
+# Arguments
+- `coeffs`: Array of coefficients for each term of the polynomial
+- `degrees`: 2d array, where each row represents the degrees of the variables of the term
+- `homogeneousDegree`: The homogeneous degree of the polynomial
+"""
 mutable struct HomogeneousPolynomial
     coeffs::Vector{Int}
     degrees::Array{Int, 2}
     homogeneousDegree::Int
 end
 
+"""
+    HomogeneousPolynomial(coeffs, degrees)
+
+Lazier for creating HomogeneousPolynomial object
+"""
 function HomogeneousPolynomial(coeffs::Vector{Int}, degrees::Array{Int, 2})
     @assert length(coeffs) == size(degrees, 1)
     return HomogeneousPolynomial(coeffs, degrees, sum(degrees[1, :]))
 end
 
+"""
+    Delta1Pregen
+
+Struct that contains almost anything that can be computed for the Delta1 algorithm. See pregen_delta1() to actually generate this
+
+# Fields
+- `numVars`: number of variables of polynomial
+- `prime`: chosen prime number
+- `step1pregen`: pregen object for first gpu_pow() step
+- `step2pregen`: pregen object for second gpu_pow() step
+- `inputLen1`: Length of first gpu_pow()'s input
+- `inputLen2`: Length of second gpu_pow()'s input
+- `key1`: Key for encoding multiple variables into 1 for first step
+- `key2`: Key for encoding multiple variables into 1 for second step
+"""
 struct Delta1Pregen
     numVars::Int
     prime::Int
@@ -23,6 +53,11 @@ struct Delta1Pregen
     key2::Int
 end
 
+"""
+    pregen_delta1(numVars, prime)
+
+Generates a Delta1Pregen object corresponding to numVars and prime.
+"""
 function pregen_delta1(numVars::Int, prime::Int)
     # TODO very temporary
     
@@ -50,19 +85,27 @@ function pregen_delta1(numVars::Int, prime::Int)
     inputLen1 = numVars * (step1ResultDegree + 1) ^ (numVars - 2) + 1
     fftSize1 = nextpow(2, (inputLen1 - 1) * (prime - 1) + 1)
 
-    step1Pregen = pregen_gpu_pow(primeArray = primeArray1, len = fftSize1, crtType = crtType1, resultType = resultType1)
+    step1Pregen = pregen_gpu_pow(primeArray1, fftSize1, crtType1, resultType1)
 
     step2ResultDegree = step1ResultDegree * prime
     key2 = step2ResultDegree + 1
     inputLen2 = step1ResultDegree * (step2ResultDegree + 1) ^ (numVars - 2) + 1
     fftSize2 = nextpow(2, (inputLen2 - 1) * prime + 1)
 
-    step2Pregen = pregen_gpu_pow(primeArray = primeArray2, len = fftSize2, crtType = crtType2, resultType = resultType2)
+    step2Pregen = pregen_gpu_pow(primeArray2, fftSize2, crtType2, resultType2)
 
     return Delta1Pregen(numVars, prime, step1Pregen, step2Pregen, inputLen1, inputLen2, key1, key2)
 end
 
+"""
+    kronecker_substitution(hp, pow, pregen)
 
+Isomorphically polynomial represented by `hp` to 1-variate polynomial.
+For example the variables x^11*y^2*z^1*w^2, with selecting a maximum degree of 16, encodes to:
+x^(11 + 2 * 17 + 1 * 17^2)
+
+We can ignore the last term because the terms have homogeneous degree
+"""
 function kronecker_substitution(hp::HomogeneousPolynomial, pow::Int, pregen::Delta1Pregen)::Vector{Int}
     key = hp.homogeneousDegree * pow + 1
 
@@ -80,6 +123,11 @@ function kronecker_substitution(hp::HomogeneousPolynomial, pow::Int, pregen::Del
     return result
 end
 
+"""
+    decode_kronecker_substitution(arr, key, numVars, totalDegree)
+
+Maps 1-variate polynomial back to `numVars`-variate polynomial
+"""
 function decode_kronecker_substitution(arr, key, numVars, totalDegree)
     flags = map(x -> x != 0 ? 1 : 0, arr)
     indices = accumulate(+, flags)
@@ -133,6 +181,11 @@ function decode_kronecker_substitution(arr, key, numVars, totalDegree)
     return HomogeneousPolynomial(Array(resultCoeffs), Array(resultDegrees), totalDegree)
 end
 
+"""
+    change_encoding(num, e1, e2, numValues)
+
+Return num, if it was encoded with e2 instead of e1
+"""
 function change_encoding(num::Int, e1::Int, e2::Int, numValues::Int)
     result = 0
     for i in 1:numValues
@@ -143,6 +196,11 @@ function change_encoding(num::Int, e1::Int, e2::Int, numValues::Int)
     return result
 end
 
+"""
+    change_polynomial_encoding(p, pregen)
+
+Intermediate step of Delta1: Instead of decoding the result of the first step, then re-encoding it, we can just map each term directly to the input of the next step
+"""
 function change_polynomial_encoding(p::CuVector{Int}, pregen::Delta1Pregen)
     result = CUDA.zeros(Int, pregen.inputLen2)
 
@@ -168,7 +226,21 @@ function change_polynomial_encoding(p::CuVector{Int}, pregen::Delta1Pregen)
 end
 
 """
-cpu_remove_pth_power_terms!(big,small)
+    change_polynomial_encoding_kernel()
+
+Kernel function for change_polynomial_encoding()
+"""
+function change_polynomial_encoding_kernel(source, dest, key1, key2, numVars, offset = 0)
+    tid = threadIdx().x + (blockIdx().x - 1) * blockDim().x + offset
+
+    resultidx = change_encoding(tid - 1, key1, key2, numVars - 1) + 1
+    dest[resultidx] = source[tid]
+
+    return
+end
+
+"""
+    cpu_remove_pth_power_terms!(big,small)
 
 Subtracts small .^ p from big as polynomials.
 
@@ -187,10 +259,10 @@ Should be fast on the cpu
 Note that this means if the two polynomials don't have the same term order,
 this can fail.
 
-Arguments:
-big - HomogeneousPolynomial
-small - HomogeneousPolynomial
-p - power to remove terms from
+# Arguments:
+- `big::HomogeneousPolynomial`
+- `small::HomogeneousPolynomial`
+- `p`: power to remove terms from
 """
 function cpu_remove_pth_power_terms!(big,small,p)
     
@@ -218,58 +290,12 @@ function cpu_remove_pth_power_terms!(big,small,p)
     nothing
 end
 
+"""
+    generate_compositions(n, k)
 
-function change_polynomial_encoding_kernel(source, dest, key1, key2, numVars, offset = 0)
-    tid = threadIdx().x + (blockIdx().x - 1) * blockDim().x + offset
-
-    resultidx = change_encoding(tid - 1, key1, key2, numVars - 1) + 1
-    dest[resultidx] = source[tid]
-
-    return
-end
-
-function delta1(hp::HomogeneousPolynomial, prime, pregen::Delta1Pregen)
-    @assert prime == pregen.prime && size(hp.degrees, 2) == pregen.numVars "Current pregen isn't compatible with input"
-
-    # Raising f ^ p - 1
-    input1 = CuArray(kronecker_substitution(hp, prime - 1, pregen))
-    output1 = gpu_pow(input1, prime - 1; pregen = pregen.step1pregen)
-
-    # Reduce mod p
-    output1 = map(num -> faster_mod(num, prime), output1)
-    # Raising g ^ p
-    input2 = CuArray(change_polynomial_encoding(output1, pregen))
-
-    output2 = gpu_pow(input2, prime; pregen = pregen.step2pregen)
-    result = decode_kronecker_substitution(output2, pregen.key2, pregen.numVars, pregen.key2 - 1)
-    
-    # for now, do the rest of the steps on the cpu
-    # TODO: uncomment this after fixing the bug
-    
-    intermediate = decode_kronecker_substitution(output1, pregen.key1, pregen.numVars, pregen.key1 - 1)
-    cpu_remove_pth_power_terms!(result,intermediate,prime)
-
-    # for i in 1:length(result.coeffs)
-    #     # so it doesn't explode my terminal
-
-    #     if result.coeffs[i] % 5 != 0
-    #         println("WRONG COEFFICIENT $i: $(result.coeffs[i]), $(result.degrees[i, :])")
-    #     end
-    #     # divexact is part of OSCAR, which isn't installing on my computer.
-    #     # the loop above guarantees same behavior as divexact anyways
-
-    #     # result.coeffs = divexact.(result.coeffs,5)
-    #     result.coeffs[i] = result.coeffs[i] ÷ 5
-    # end
-    result.coeffs ./= prime
-
-    result.coeffs .%= prime
-
-    #return (intermediate, result, finalresult
-    result
-end
-
-function generate_compositions(n, k, type::DataType = Int32)
+Escaped hypertriangle code because still useful for generating starting degrees
+"""
+function generate_compositions(n, k, type::DataType = Int64)
     compositions = zeros(type, binomial(n + k - 1, k - 1), k)
     current_composition = zeros(type, k)
     current_composition[1] = n
@@ -292,6 +318,40 @@ function generate_compositions(n, k, type::DataType = Int32)
 
     return compositions
 end
+
+function delta1(hp::HomogeneousPolynomial, prime, pregen::Delta1Pregen)
+    @assert prime == pregen.prime && size(hp.degrees, 2) == pregen.numVars "Current pregen isn't compatible with input"
+
+    # Raising f ^ p - 1
+    input1 = CuArray(kronecker_substitution(hp, prime - 1, pregen))
+    output1 = gpu_pow(input1, prime - 1; pregen = pregen.step1pregen)
+
+    # Reduce mod p
+    output1 = map(num -> faster_mod(num, prime), output1)
+    # Raising g ^ p
+    input2 = CuArray(change_polynomial_encoding(output1, pregen))
+
+    output2 = gpu_pow(input2, prime; pregen = pregen.step2pregen)
+    result = decode_kronecker_substitution(output2, pregen.key2, pregen.numVars, pregen.key2 - 1)
+    
+    intermediate = decode_kronecker_substitution(output1, pregen.key1, pregen.numVars, pregen.key1 - 1)
+    cpu_remove_pth_power_terms!(result,intermediate,prime)
+
+    # Here for debug purposes
+    # for i in 1:length(result.coeffs)
+        # if result.coeffs[i] % 5 != 0
+        #     println("WRONG COEFFICIENT $i: $(result.coeffs[i]), $(result.degrees[i, :])")
+        # end
+    # end
+    result.coeffs ./= prime
+
+    result.coeffs .%= prime
+
+    #return (intermediate, result, finalresult
+    result
+end
+
+
 
 function test_delta1()
     coeffs = [1, 1, 1, 1]

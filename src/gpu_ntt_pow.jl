@@ -1,5 +1,10 @@
 include("ntt_utils.jl")
 
+"""
+    GPUPowPregen
+
+Struct that contains all information needed for quickly executing gpu_pow
+"""
 struct GPUPowPregen
     primeArray::Vector{Int}
     npruArray::Vector{Int}
@@ -12,7 +17,19 @@ struct GPUPowPregen
     resultType::DataType
 end
 
-function pregen_gpu_pow(;primeArray::Vector{Int}, len::Int, crtType::DataType, resultType::DataType)
+"""
+    pregen_gpu_pow(primeArray, len, crtType, resultType)
+
+Takes a primeArray, a FFT length, and two datatypes to generate a 
+GPUPowPregen object.
+
+# Arguments
+- `primeArray::Vector{Int}`: Array of prime numbers of the form k * len + 1, whose product is an upper bound for the largest coefficient of the resulting polynomial
+- `len::Int`: Length of resulting FFT
+- `crtType::DataType`: Type used for intermediate steps of CRT. Doesn't necessarily have to be the same as resultType
+- `resultType::DataType`: Type used for result of CRT, or ending result
+"""
+function pregen_gpu_pow(primeArray::Vector{Int}, len::Int, crtType::DataType, resultType::DataType)::GPUPowPregen
     @assert ispow2(len) "len must be a power 2"
 
     npruArray = npruarray_generator(primeArray, len)
@@ -24,36 +41,25 @@ function pregen_gpu_pow(;primeArray::Vector{Int}, len::Int, crtType::DataType, r
     return GPUPowPregen(primeArray, npruArray, npruInverseArray, len, log2len, lenInverseArray, pregenButterfly, crtType, resultType)
 end
 
-function generate_butterfly_permutations(n::Int)::CuVector{Int}
-    @assert ispow2(n) "n must be a power of 2"
-    perm = parallelBitReverseCopy(CuArray([i for i in 1:n]))
-    return perm
-end
+"""
+    gpu_pow(vec, pow; pregen)
 
-function bit_reverse(x::Integer, log2n::Integer)
-    temp = 0
-    for i in 0:log2n-1
-        temp <<= 1
-        temp |= (x & 1)
-        x >>= 1
-    end
-    return temp
-end
-
-function gpu_pow(p1::CuVector{Int}, pow::Int; pregen::GPUPowPregen)
-    finalLength = (length(p1) - 1) * pow + 1
+Raises polynomial represented by `vec` to the `pow` power. Current implementation requires a pregenerated object to work
+"""
+function gpu_pow(vec::CuVector{Int}, pow::Int; pregen::GPUPowPregen)
+    finalLength = (length(vec) - 1) * pow + 1
 
     # Padding, stacking for multiple prime modulus, and butterflying indices
-    stackedp1 = repeat(((vcat(p1, zeros(Int, pregen.len - length(p1))))[pregen.pregenButterfly])', length(pregen.primeArray), 1)
+    stackedvec = repeat(((vcat(vec, zeros(Int, pregen.len - length(vec))))[pregen.pregenButterfly])', length(pregen.primeArray), 1)
 
     # DFT
-    gpu_ntt(stackedp1, pregen.primeArray, pregen.npruArray, pregen.len, pregen.log2len)
+    gpu_ntt!(stackedvec, pregen.primeArray, pregen.npruArray, pregen.len, pregen.log2len)
 
     # Broadcasting power
-    broadcast_pow(stackedp1, pregen.primeArray, pow)
+    broadcast_pow!(stackedvec, pregen.primeArray, pow)
 
     # IDFT
-    multimodularResultArr = gpu_intt(stackedp1, pregen)
+    multimodularResultArr = gpu_intt(stackedvec, pregen)
 
     # here for memories of debugging
     # if pregen.len > 9000
@@ -63,7 +69,6 @@ function gpu_pow(p1::CuVector{Int}, pow::Int; pregen::GPUPowPregen)
     #     println("two coeffs of term [12, 20, 39, 9]: ", Array(multimodularResultArr)[:, 257512])
     #     println("two coeffs of term [15, 20, 39, 6]: ", Array(multimodularResultArr)[:, 257515])
     #     println("primearray: ", pregen.primeArray)
-
     # end
 
     # CRT
@@ -72,7 +77,12 @@ function gpu_pow(p1::CuVector{Int}, pow::Int; pregen::GPUPowPregen)
     return result
 end
 
-function broadcast_pow(arr::CuArray{}, primearray, pow)
+"""
+    broadcast_pow!(arr, primearray, pow)
+
+Raises the i-th row of `arr` to `pow` mod `primearray[i]`.
+"""
+function broadcast_pow!(arr::CuArray, primearray::Vector{Int}, pow::Int)
     @assert size(arr, 1) == length(primearray)
 
     nthreads = min(size(arr, 2), 512)
@@ -80,7 +90,7 @@ function broadcast_pow(arr::CuArray{}, primearray, pow)
 
     cu_primearray = CuArray(primearray)
 
-    function broadcast_pow_kernel(arr, cu_primearray, pow)
+    function broadcast_pow_kernel!(arr, cu_primearray, pow)
         idx = threadIdx().x + (blockIdx().x - 1) * blockDim().x
         for i in axes(arr, 1)
             arr[i, idx] = power_mod(arr[i, idx], pow, cu_primearray[i])
@@ -92,15 +102,20 @@ function broadcast_pow(arr::CuArray{}, primearray, pow)
     @cuda(
         threads = nthreads,
         blocks = nblocks,
-        broadcast_pow_kernel(arr, cu_primearray, pow)
+        broadcast_pow_kernel!(arr, cu_primearray, pow)
     )
 
     return
 end
 
+"""
+    gpu_intt(vec, pregen)
+
+Computes inverse NTT of vec. Note that because I'm a bad coder, the input of this shouldn't be butterflied
+"""
 function gpu_intt(vec::CuArray{Int, 2}, pregen::GPUPowPregen)
     arg1 = vec[:, pregen.pregenButterfly]
-    result = gpu_ntt(arg1, pregen.primeArray, pregen.npruInverseArray, pregen.len, pregen.log2len)
+    result = gpu_ntt!(arg1, pregen.primeArray, pregen.npruInverseArray, pregen.len, pregen.log2len)
 
     for i in 1:length(pregen.primeArray)
         # result[i, :] .= map(x -> faster_mod(x * mod_inverse(len, primearray[i]), primearray[i]), result[i, :])
@@ -111,7 +126,19 @@ function gpu_intt(vec::CuArray{Int, 2}, pregen::GPUPowPregen)
     return result
 end
 
-function gpu_ntt(vec::CuArray{Int}, primeArray, npruArray, len, log2len)
+"""
+    gpu_ntt!(vec, primeArray, npruArray, len, log2len)
+
+Computes NTT of vec.
+
+# Arguments
+- `stackedvec`: 2-dimensional array, with each row `i` containing the NTT of the original vec mod `primeArray[i]`
+- `primeArray`: Array of selected NTT primes
+- `npruArray`: Array of `len`-th principal roots of unity mod the primes in primeArray
+- `len`: Length of the FFT
+- `log2len`: log2(len)
+"""
+function gpu_ntt!(stackedvec::CuArray{Int}, primeArray, npruArray, len, log2len)
     cu_primearray = CuArray(primeArray)
     nthreads = min(512, len ÷ 2)
     nblocks = cld(len ÷ 2, nthreads)
@@ -125,13 +152,18 @@ function gpu_ntt(vec::CuArray{Int}, primeArray, npruArray, len, log2len)
         @cuda(
             threads = nthreads,
             blocks = nblocks,
-            gpu_ntt_kernel!(vec, cu_primearray, theta_m, magic, m2)
+            gpu_ntt_kernel!(stackedvec, cu_primearray, theta_m, magic, m2)
         )
     end
 
-    return vec
+    return stackedvec
 end
 
+"""
+    gpu_ntt_kernel!(vec, primearray, theta_m, magic, m2)
+
+Kernel function for gpu_ntt!()
+"""
 function gpu_ntt_kernel!(vec, primearray, theta_m, magic, m2)
     idx = threadIdx().x + (blockIdx().x - 1) * blockDim().x - 1
     k = Int(2 * m2 * (idx % magic) + floor(idx/magic))
@@ -148,6 +180,11 @@ function gpu_ntt_kernel!(vec, primearray, theta_m, magic, m2)
     return 
 end
 
+"""
+    build_result(multimodularResultArr, primearray, crtType, resultType)
+
+Combines all rows of multimodularResultArr into one using Chinese Remainder Theorem
+"""
 function build_result(multimodularResultArr::CuArray{Int, 2}, primearray::Vector{Int}, crtType::DataType, resultType::DataType)
     @assert size(multimodularResultArr, 1) == length(primearray) "number of rows of input array and number of primes must be equal"
 
@@ -170,6 +207,11 @@ function build_result(multimodularResultArr::CuArray{Int, 2}, primearray::Vector
     return resultType.(result)
 end
 
+"""
+    build_result_kernel(result, multimodularResultArr, row, currmod, newprime)
+
+Kernel function for build_result()
+"""
 function build_result_kernel(result, multimodularResultArr, row, currmod, newprime)
     idx = threadIdx().x + (blockIdx().x - 1) * blockDim().x
     result[idx] = chinese_remainder_two(result[idx], currmod, multimodularResultArr[row, idx], newprime)
