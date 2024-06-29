@@ -1,5 +1,8 @@
 include("ntt_utils.jl")
 
+const MAX_THREADS_PER_BLOCK = 384 # on a RTX 3070
+const NUM_THREADS_PER_BLOCK = 32
+
 """
     GPUPowPregen
 
@@ -190,7 +193,7 @@ function build_result(multimodularResultArr::CuArray{Int, 2}, primearray::Vector
 
     result = crtType.(multimodularResultArr[1, :])
 
-    nthreads = min(512, length(result))
+    nthreads = min(NUM_THREADS_PER_BLOCK, length(result))
     nblocks = cld(length(result), nthreads)
 
     currmod = crtType(primearray[1])

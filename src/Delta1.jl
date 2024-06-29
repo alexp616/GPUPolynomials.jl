@@ -343,6 +343,7 @@ function delta1(hp::HomogeneousPolynomial, prime, pregen::Delta1Pregen)
         #     println("WRONG COEFFICIENT $i: $(result.coeffs[i]), $(result.degrees[i, :])")
         # end
     # end
+
     result.coeffs ./= prime
 
     result.coeffs .%= prime
