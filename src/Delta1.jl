@@ -138,8 +138,9 @@ function decode_kronecker_substitution(arr, key, numVars, totalDegree)
     resultCoeffs = CUDA.zeros(Int, resultLen)
     resultDegrees = CUDA.zeros(Int, resultLen, numVars)
 
-    function decode_kronecker_kernel(resultCoeffs, resultDegrees, arr, flags, indices, key, numVars, totalDegree, offset = 0)
+    function decode_kronecker_kernel(resultCoeffs, resultDegrees, arr, flags, indices, key, numVars, totalDegree, offset)
         idx = threadIdx().x + (blockIdx().x - 1) * blockDim().x + offset
+        # @cuassert idx <= length(arr) "idx $idx is out of bounds"
         if flags[idx] != 0
             num = idx - 1
             termNum = indices[idx]
@@ -155,28 +156,21 @@ function decode_kronecker_substitution(arr, key, numVars, totalDegree)
         return
     end
 
-    nthreads = min(512, length(arr))
-    nblocks = fld(length(arr), nthreads)
-
-    last_block_threads = length(arr) - nthreads * nblocks
+    kernel = @cuda launch = false decode_kronecker_kernel(resultCoeffs, resultDegrees, arr, flags, indices, key, numVars, totalDegree, 0)
+    config = launch_configuration(kernel.fun)
+    threads = min(length(arr), config.threads)
+    blocks = fld(length(arr), threads)
+    last_block_threads = length(arr) - threads * blocks
 
     # I have this last_block_threads thing because it ran slightly faster than
     # padding to the next multiple of nthreads, might not be the same on other machines
     # Also, the gpu kernels I see in CUDA.jl have some if tid < length(arr) ... stuff,
     # that just index out of bounds for me if I do that, so I don't know how they coded those
     if last_block_threads > 0
-        @cuda(
-            threads = last_block_threads,
-            blocks = 1,
-            decode_kronecker_kernel(resultCoeffs, resultDegrees, arr, flags, indices, key, numVars, totalDegree, nthreads * nblocks)
-        )
+        kernel(resultCoeffs, resultDegrees, arr, flags, indices, key, numVars, totalDegree, threads * blocks; threads = last_block_threads, blocks = 1)
     end
 
-    CUDA.@sync @cuda(
-        threads = nthreads,
-        blocks = nblocks,
-        decode_kronecker_kernel(resultCoeffs, resultDegrees, arr, flags, indices, key, numVars, totalDegree)
-    )
+    kernel(resultCoeffs, resultDegrees, arr, flags, indices, key, numVars, totalDegree, 0; threads = threads, blocks = blocks)
     
     return HomogeneousPolynomial(Array(resultCoeffs), Array(resultDegrees), totalDegree)
 end
@@ -204,23 +198,17 @@ Intermediate step of Delta1: Instead of decoding the result of the first step, t
 function change_polynomial_encoding(p::CuVector{Int}, pregen::Delta1Pregen)
     result = CUDA.zeros(Int, pregen.inputLen2)
 
-    nthreads = min(512, length(p))
-    nblocks = fld(length(p), nthreads)
-    lastBlockThreads = length(p) - nthreads * nblocks
+    kernel = @cuda launch = false change_polynomial_encoding_kernel(p, result, pregen.key1, pregen.key2, pregen.numVars, 0)
+    config = launch_configuration(kernel.fun)
+    threads = min(config.threads, length(p))
+    blocks = fld(length(p), threads)
+    lastBlockThreads = length(p) - threads * blocks
 
     if lastBlockThreads > 0
-        @cuda(
-            threads = lastBlockThreads,
-            blocks = 1,
-            change_polynomial_encoding_kernel(p, result, pregen.key1, pregen.key2, pregen.numVars, nthreads * nblocks)
-        )
+        kernel(p, result, pregen.key1, pregen.key2, pregen.numVars, threads * blocks; threads = lastBlockThreads, blocks = 1)
     end
 
-    @cuda(
-        threads = nthreads,
-        blocks = nblocks,
-        change_polynomial_encoding_kernel(p, result, pregen.key1, pregen.key2, pregen.numVars)
-    )
+    kernel(p, result, pregen.key1, pregen.key2, pregen.numVars, 0; threads = threads, blocks = blocks)
 
     return result
 end
@@ -230,7 +218,7 @@ end
 
 Kernel function for change_polynomial_encoding()
 """
-function change_polynomial_encoding_kernel(source, dest, key1, key2, numVars, offset = 0)
+function change_polynomial_encoding_kernel(source, dest, key1, key2, numVars, offset)
     tid = threadIdx().x + (blockIdx().x - 1) * blockDim().x + offset
 
     resultidx = change_encoding(tid - 1, key1, key2, numVars - 1) + 1
@@ -339,9 +327,10 @@ function delta1(hp::HomogeneousPolynomial, prime, pregen::Delta1Pregen)
 
     # Here for debug purposes
     # for i in 1:length(result.coeffs)
-        # if result.coeffs[i] % 5 != 0
-        #     println("WRONG COEFFICIENT $i: $(result.coeffs[i]), $(result.degrees[i, :])")
-        # end
+    # for i in 80250:80350
+    #     if result.coeffs[i] % prime != 0
+    #         println("WRONG COEFFICIENT $i: $(result.coeffs[i]), $(result.degrees[i, :])")
+    #     end
     # end
 
     result.coeffs ./= prime
@@ -366,13 +355,13 @@ function test_delta1()
     degrees2 = [4 0 0 0; 3 1 0 0; 3 0 1 0; 3 0 0 1; 2 2 0 0; 2 1 1 0; 2 1 0 1; 2 0 2 0; 2 0 1 1; 2 0 0 2; 1 3 0 0; 1 2 1 0; 1 2 0 1; 1 1 2 0; 1 1 1 1; 1 1 0 2; 1 0 3 0; 1 0 2 1; 1 0 1 2; 1 0 0 3; 0 4 0 0; 0 3 1 0; 0 3 0 1; 0 2 2 0; 0 2 1 1; 0 2 0 2; 0 1 3 0; 0 1 2 1; 0 1 1 2; 0 1 0 3; 0 0 4 0; 0 0 3 1; 0 0 2 2; 0 0 1 3; 0 0 0 4]
     coeffs2 = fill(4, size(degrees2, 1))
 
-    polynomial = HomogeneousPolynomial(coeffs, degrees)
+    polynomial1 = HomogeneousPolynomial(coeffs, degrees)
     polynomial2 = HomogeneousPolynomial(coeffs2, degrees2)
 
     pregen = pregen_delta1(4, 5)
 
     println("Time to raise 4-variate polynomial to the 4th and 5th power for the first time: ")
-    CUDA.@time result = delta1(polynomial, 5, pregen)
+    CUDA.@time result = delta1(polynomial1, 5, pregen)
 
     println("Time to raise different 4-variate polynomial to the 6th and 7th power: ")
     for i in 1:10

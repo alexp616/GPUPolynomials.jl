@@ -6,6 +6,7 @@ using Dates
 
 import Base.div
 
+
 # Also exists to guarantee positive mod numbers so my chinese remainder theorem
 # doesn't get messed up
 """
@@ -236,16 +237,14 @@ function nth_principal_root_of_unity(n::Integer, p::Integer)
 end
 
 """
-    parallelBitReverseCopy(p)
+    parallel_bit_reverse_copy(p)
 
 Butterflies indices of p
 """
-function parallelBitReverseCopy(p)
+function parallel_bit_reverse_copy(p)
     @assert ispow2(length(p)) "p must be an array with length of a power of 2"
     len = length(p)
     result = CUDA.zeros(eltype(p), len)
-    nthreads = min(512, len ÷ 2)
-    nblocks = cld(len ÷ 2, nthreads)
     log2n = Int(log2(len))
 
     function kernel(p, dest, len, log2n)
@@ -260,11 +259,12 @@ function parallelBitReverseCopy(p)
         return nothing
     end
 
-    @cuda(
-        threads = nthreads,
-        blocks = nblocks,
-        kernel(p, result, len, log2n)
-    )
+    kernel = @cuda launch = false kernel(p, result, len, log2n)
+    config = launch_configuration(kernel.fun)
+    threads = min(len ÷ 2, prevpow(2, config.threads))
+    blocks = cld(len ÷ 2, threads)
+
+    kernel(p, result, len, log2n; threads = threads, blocks = blocks)
     
     return result
 end
@@ -291,6 +291,6 @@ Generates a permutation array for butterflying arrays of length `n`
 """
 function generate_butterfly_permutations(n::Int)::CuVector{Int}
     @assert ispow2(n) "n must be a power of 2"
-    perm = parallelBitReverseCopy(CuArray([i for i in 1:n]))
+    perm = parallel_bit_reverse_copy(CuArray([i for i in 1:n]))
     return perm
 end

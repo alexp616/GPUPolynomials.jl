@@ -1,8 +1,5 @@
 include("ntt_utils.jl")
 
-const MAX_THREADS_PER_BLOCK = 384 # on a RTX 3070
-const NUM_THREADS_PER_BLOCK = 32
-
 """
     GPUPowPregen
 
@@ -65,12 +62,12 @@ function gpu_pow(vec::CuVector{Int}, pow::Int; pregen::GPUPowPregen)
     multimodularResultArr = gpu_intt(stackedvec, pregen)
 
     # here for memories of debugging
-    # if pregen.len > 9000
-    #     temp = Array(multimodularResultArr)
-    #     # temp[:, 257512] .= [11, 11]
-    #     multimodularResultArr = CuArray(temp)
-    #     println("two coeffs of term [12, 20, 39, 9]: ", Array(multimodularResultArr)[:, 257512])
-    #     println("two coeffs of term [15, 20, 39, 6]: ", Array(multimodularResultArr)[:, 257515])
+    # if pregen.len > 100000
+    #     # temp = Array(multimodularResultArr)
+    #     # temp[:, 156681] .= [11, 11, 11]
+    #     # multimodularResultArr = CuArray(temp)
+    #     println("three coeffs of term [17, 82, 5, 64]: ", Array(multimodularResultArr)[:, 156681])
+    #     # println("two coeffs of term [15, 20, 39, 6]: ", Array(multimodularResultArr)[:, 257515])
     #     println("primearray: ", pregen.primeArray)
     # end
 
@@ -88,9 +85,6 @@ Raises the i-th row of `arr` to `pow` mod `primearray[i]`.
 function broadcast_pow!(arr::CuArray, primearray::Vector{Int}, pow::Int)
     @assert size(arr, 1) == length(primearray)
 
-    nthreads = min(size(arr, 2), 512)
-    nblocks = cld(size(arr, 2), nthreads)
-
     cu_primearray = CuArray(primearray)
 
     function broadcast_pow_kernel!(arr, cu_primearray, pow)
@@ -102,11 +96,12 @@ function broadcast_pow!(arr::CuArray, primearray::Vector{Int}, pow::Int)
         return
     end
 
-    @cuda(
-        threads = nthreads,
-        blocks = nblocks,
-        broadcast_pow_kernel!(arr, cu_primearray, pow)
-    )
+    kernel = @cuda launch=false broadcast_pow_kernel!(arr, cu_primearray, pow)
+    config = launch_configuration(kernel.fun)
+    threads = min(size(arr, 2), prevpow(2, config.threads))
+    blocks = cld(size(arr, 2), threads)
+
+    kernel(arr, cu_primearray, pow; threads = threads, blocks = blocks)
 
     return
 end
@@ -143,20 +138,18 @@ Computes NTT of vec.
 """
 function gpu_ntt!(stackedvec::CuArray{Int}, primeArray, npruArray, len, log2len)
     cu_primearray = CuArray(primeArray)
-    nthreads = min(512, len ÷ 2)
-    nblocks = cld(len ÷ 2, nthreads)
+    kernel = @cuda launch=false gpu_ntt_kernel!(stackedvec, cu_primearray, cu_primearray, 0, 0)
+    config = launch_configuration(kernel.fun)
+    threads = min(len ÷ 2, prevpow(2, config.threads))
+    blocks = cld(len ÷ 2, threads)
 
     for i in 1:log2len
         m = 1 << i
         m2 = m >> 1
         magic = 1 << (log2len - i)
         theta_m = CuArray(powermod.(npruArray, Int(len / m), primeArray))
-        @assert all(x -> x >= 0, theta_m)
-        @cuda(
-            threads = nthreads,
-            blocks = nblocks,
-            gpu_ntt_kernel!(stackedvec, cu_primearray, theta_m, magic, m2)
-        )
+
+        kernel(stackedvec, cu_primearray, theta_m, magic, m2; threads=threads, blocks=blocks)
     end
 
     return stackedvec
@@ -167,7 +160,7 @@ end
 
 Kernel function for gpu_ntt!()
 """
-function gpu_ntt_kernel!(vec, primearray, theta_m, magic, m2)
+function gpu_ntt_kernel!(vec, primearray, theta_m, magic::Int, m2::Int)
     idx = threadIdx().x + (blockIdx().x - 1) * blockDim().x - 1
     k = Int(2 * m2 * (idx % magic) + floor(idx/magic))
 
@@ -189,21 +182,18 @@ end
 Combines all rows of multimodularResultArr into one using Chinese Remainder Theorem
 """
 function build_result(multimodularResultArr::CuArray{Int, 2}, primearray::Vector{Int}, crtType::DataType, resultType::DataType)
-    @assert size(multimodularResultArr, 1) == length(primearray) "number of rows of input array and number of primes must be equal"
+    # @assert size(multimodularResultArr, 1) == length(primearray) "number of rows of input array and number of primes must be equal"
 
     result = crtType.(multimodularResultArr[1, :])
-
-    nthreads = min(NUM_THREADS_PER_BLOCK, length(result))
-    nblocks = cld(length(result), nthreads)
-
     currmod = crtType(primearray[1])
 
+    kernel = @cuda launch=false build_result_kernel(result, multimodularResultArr, 0, currmod, 0)
+    config = launch_configuration(kernel.fun)
+    threads = Base.min(length(result), prevpow(2, config.threads))
+    blocks = cld(length(result), threads)
+
     for i in 2:size(multimodularResultArr, 1)
-        CUDA.@sync @cuda(
-            threads = nthreads,
-            blocks = nblocks,
-            build_result_kernel(result, multimodularResultArr, i, currmod, primearray[i])
-        )
+        kernel(result, multimodularResultArr, i, currmod, primearray[i]; threads = threads, blocks = blocks)
         currmod *= primearray[i]
     end
 
