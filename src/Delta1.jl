@@ -138,39 +138,32 @@ function decode_kronecker_substitution(arr, key, numVars, totalDegree)
     resultCoeffs = CUDA.zeros(Int, resultLen)
     resultDegrees = CUDA.zeros(Int, resultLen, numVars)
 
-    function decode_kronecker_kernel(resultCoeffs, resultDegrees, arr, flags, indices, key, numVars, totalDegree, offset)
-        idx = threadIdx().x + (blockIdx().x - 1) * blockDim().x + offset
-        # @cuassert idx <= length(arr) "idx $idx is out of bounds"
-        if flags[idx] != 0
-            num = idx - 1
-            termNum = indices[idx]
-            for i in 1:numVars - 1
-                num, r = divrem(num, key)
-                resultDegrees[termNum, i] = r
-                totalDegree -= r
+    function decode_kronecker_kernel(resultCoeffs, resultDegrees, arr, flags, indices, key, numVars, totalDegree)
+        idx = threadIdx().x + (blockIdx().x - 1) * blockDim().x
+
+        if idx <= length(arr)
+            if flags[idx] != 0
+                num = idx - 1
+                termNum = indices[idx]
+                for i in 1:numVars - 1
+                    num, r = divrem(num, key)
+                    resultDegrees[termNum, i] = r
+                    totalDegree -= r
+                end
+                resultCoeffs[termNum] = arr[idx]
+                resultDegrees[termNum, numVars] = totalDegree
             end
-            resultCoeffs[termNum] = arr[idx]
-            resultDegrees[termNum, numVars] = totalDegree
         end
-        
+
         return
     end
 
-    kernel = @cuda launch = false decode_kronecker_kernel(resultCoeffs, resultDegrees, arr, flags, indices, key, numVars, totalDegree, 0)
+    kernel = @cuda launch = false decode_kronecker_kernel(resultCoeffs, resultDegrees, arr, flags, indices, key, numVars, totalDegree)
     config = launch_configuration(kernel.fun)
     threads = min(length(arr), config.threads)
-    blocks = fld(length(arr), threads)
-    last_block_threads = length(arr) - threads * blocks
+    blocks = cld(length(arr), threads)
 
-    # I have this last_block_threads thing because it ran slightly faster than
-    # padding to the next multiple of nthreads, might not be the same on other machines
-    # Also, the gpu kernels I see in CUDA.jl have some if tid < length(arr) ... stuff,
-    # that just index out of bounds for me if I do that, so I don't know how they coded those
-    if last_block_threads > 0
-        kernel(resultCoeffs, resultDegrees, arr, flags, indices, key, numVars, totalDegree, threads * blocks; threads = last_block_threads, blocks = 1)
-    end
-
-    kernel(resultCoeffs, resultDegrees, arr, flags, indices, key, numVars, totalDegree, 0; threads = threads, blocks = blocks)
+    kernel(resultCoeffs, resultDegrees, arr, flags, indices, key, numVars, totalDegree; threads = threads, blocks = blocks)
     
     return HomogeneousPolynomial(Array(resultCoeffs), Array(resultDegrees), totalDegree)
 end
@@ -198,17 +191,12 @@ Intermediate step of Delta1: Instead of decoding the result of the first step, t
 function change_polynomial_encoding(p::CuVector{Int}, pregen::Delta1Pregen)
     result = CUDA.zeros(Int, pregen.inputLen2)
 
-    kernel = @cuda launch = false change_polynomial_encoding_kernel(p, result, pregen.key1, pregen.key2, pregen.numVars, 0)
+    kernel = @cuda launch = false change_polynomial_encoding_kernel(p, result, pregen.key1, pregen.key2, pregen.numVars)
     config = launch_configuration(kernel.fun)
     threads = min(config.threads, length(p))
-    blocks = fld(length(p), threads)
-    lastBlockThreads = length(p) - threads * blocks
+    blocks = cld(length(p), threads)
 
-    if lastBlockThreads > 0
-        kernel(p, result, pregen.key1, pregen.key2, pregen.numVars, threads * blocks; threads = lastBlockThreads, blocks = 1)
-    end
-
-    kernel(p, result, pregen.key1, pregen.key2, pregen.numVars, 0; threads = threads, blocks = blocks)
+    kernel(p, result, pregen.key1, pregen.key2, pregen.numVars; threads = threads, blocks = blocks)
 
     return result
 end
@@ -218,11 +206,13 @@ end
 
 Kernel function for change_polynomial_encoding()
 """
-function change_polynomial_encoding_kernel(source, dest, key1, key2, numVars, offset)
-    tid = threadIdx().x + (blockIdx().x - 1) * blockDim().x + offset
+function change_polynomial_encoding_kernel(source, dest, key1, key2, numVars)
+    tid = threadIdx().x + (blockIdx().x - 1) * blockDim().x
 
-    resultidx = change_encoding(tid - 1, key1, key2, numVars - 1) + 1
-    dest[resultidx] = source[tid]
+    if tid <= length(source)
+        resultidx = change_encoding(tid - 1, key1, key2, numVars - 1) + 1
+        dest[resultidx] = source[tid]
+    end
 
     return
 end

@@ -189,7 +189,7 @@ function build_result(multimodularResultArr::CuArray{Int, 2}, primearray::Vector
 
     kernel = @cuda launch=false build_result_kernel(result, multimodularResultArr, 0, currmod, 0)
     config = launch_configuration(kernel.fun)
-    threads = Base.min(length(result), prevpow(2, config.threads))
+    threads = min(length(result), prevpow(2, config.threads))
     blocks = cld(length(result), threads)
 
     for i in 2:size(multimodularResultArr, 1)
