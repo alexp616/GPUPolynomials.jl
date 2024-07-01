@@ -39,18 +39,26 @@ def compute_largest_term(numVars, prime):
     largestCoefficient = scale * clt_helper((y,) * numVars, weak_compositions(secondStepHomogDegree, numVars))
     return largestCoefficient
 
-numVars = [4, 5, 6]
-primes = [5, 7, 11, 13]
+compositions = weak_compositions(4, 4)
+resultTuples = weak_compositions(8, 4)
 
-for n in numVars:
-    for p in primes:
-        t1 = time.time()
-        bound1 = compute_largest_term_firststep(n, p)
-        bound2 = compute_largest_term(n, p)
-        t2 = time.time()
-        print(f"n = {n}, p = {p}: ")
-        print(f"\tbound1 = {bound1}, bound2 = {bound2}")
-        print(f"\ttime taken: {(t2 - t1)} seconds")
+for resultTuple in resultTuples:
+    result = clt_helper(resultTuple, compositions)
+    print(resultTuple, result)
+
+
+# numVars = [4, 5, 6]
+# primes = [5, 7, 11, 13]
+
+# for n in numVars:
+#     for p in primes:
+#         t1 = time.time()
+#         bound1 = compute_largest_term_firststep(n, p)
+#         bound2 = compute_largest_term(n, p)
+#         t2 = time.time()
+#         print(f"n = {n}, p = {p}: ")
+#         print(f"\tbound1 = {bound1}, bound2 = {bound2}")
+#         print(f"\ttime taken: {(t2 - t1)} seconds")
 
 
 # t1 = time.time()

@@ -85,6 +85,29 @@ function div(n::Int128, m::Int128)::Int128
     return quotient * sign
 end
 
+
+function extended_gcd_iterative(a::T, b::T) where T<:Integer
+    x0, x1 = T(1), T(0)
+    y0, y1 = T(0), T(1)
+    while b != 0
+        q = a ÷ b
+        a, b = b, faster_mod(a, b)
+        x0, x1 = x1, x0 - q * x1
+        y0, y1 = y1, y0 - q * y1
+    end
+    @assert a == 1 "$a and $b aren't coprime"
+    return (a, x0, y0)
+end
+
+# function pregen_crt(primeArray::Vector{Int})
+#     currmod = primeArray[1]
+
+#     result = zeros()
+#     while 
+
+#     end
+# end
+
 """
     chinese_remainder_two(a, n, b, m)
 
