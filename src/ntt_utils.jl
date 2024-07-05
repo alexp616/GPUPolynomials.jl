@@ -90,28 +90,41 @@ function extended_gcd_iterative(a::T, b::T) where T<:Integer
     x0, x1 = T(1), T(0)
     y0, y1 = T(0), T(1)
     while b != 0
-        q = a ÷ b
-        a, b = b, faster_mod(a, b)
+        q, r = divrem(a, b)
+        a, b = b, r
         x0, x1 = x1, x0 - q * x1
         y0, y1 = y1, y0 - q * y1
     end
     @assert a == 1 "$a and $b aren't coprime"
-    return (a, x0, y0)
+    return x0, y0
 end
 
-# function pregen_crt(primeArray::Vector{Int})
-#     currmod = primeArray[1]
+function pregen_crt(primeArray::Vector{Int}, crtType::DataType)
+    result = zeros(crtType, 3, length(primeArray) - 1)
+    currmod = primeArray[1]
+    # Iterate through, compute m1 and m2 for each modulus
+    # store n1 * m1 and n2 * m2, since CRT is a1 * n1 * m1 + a1 * n2 * m2
+    for i in 2:length(primeArray)
+        m1, m2 = extended_gcd_iterative(currmod, primeArray[i])
+        # no point in reducing these mod n1n2 because m1 is bounded by n2, so n1m1 is bounded above by n1n2
+        result[1, i - 1] = m1 * currmod
+        result[2, i - 1] = m2 * primeArray[i]
+        currmod *= primeArray[i]
+        result[3, i - 1] = currmod
+    end
 
-#     result = zeros()
-#     while 
+    return CuArray(result)
+end
 
-#     end
-# end
 
 """
     chinese_remainder_two(a, n, b, m)
 
-Return the smallest number `r` that satisfies `r = a mod n` and `r = b mod m`
+Return the smallest number `x` that satisfies `x = a mod n` and `x = b mod m`. Assumes
+n and m are coprime.
+
+In the return statement, the n0 and m0 represent the initial values of n and m, and 
+y0 and x0 satisfy n0 * x0 + m0 * y0 = 1
 """
 function chinese_remainder_two(a::T, n::T, b::Integer, m::Integer) where T<:Integer
     b = T(b)

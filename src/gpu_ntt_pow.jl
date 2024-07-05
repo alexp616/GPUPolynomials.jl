@@ -13,7 +13,7 @@ struct GPUPowPregen
     log2len::Int
     lenInverseArray::Vector{Int}
     pregenButterfly::CuVector{Int}
-    crtType::DataType
+    crtPregen::CuArray{T} where T<:Integer
     resultType::DataType
 end
 
@@ -37,8 +37,9 @@ function pregen_gpu_pow(primeArray::Vector{Int}, len::Int, crtType::DataType, re
     log2len = Int(log2(len))
     lenInverseArray = map(p -> mod_inverse(len, p), primeArray)
     pregenButterfly = generate_butterfly_permutations(len)
+    crtPregen = pregen_crt(primeArray, crtType)
 
-    return GPUPowPregen(primeArray, npruArray, npruInverseArray, len, log2len, lenInverseArray, pregenButterfly, crtType, resultType)
+    return GPUPowPregen(primeArray, npruArray, npruInverseArray, len, log2len, lenInverseArray, pregenButterfly, crtPregen, resultType)
 end
 
 """
@@ -72,7 +73,7 @@ function gpu_pow(vec::CuVector{Int}, pow::Int; pregen::GPUPowPregen)
     # end
 
     # CRT
-    result = build_result(multimodularResultArr, pregen.primeArray, pregen.crtType, pregen.resultType)[1:finalLength]
+    result = build_result(multimodularResultArr, pregen.crtPregen, pregen.resultType)[1:finalLength]
 
     return result
 end
@@ -177,37 +178,38 @@ function gpu_ntt_kernel!(vec, primearray, theta_m, magic::Int, m2::Int)
 end
 
 """
-    build_result(multimodularResultArr, primearray, crtType, resultType)
+    build_result(multimodularResultArr, crtPregen, resultType)
 
-Combines all rows of multimodularResultArr into one using Chinese Remainder Theorem
+Combines all rows of multimodularResultArr using Chinese Remainder Theorem
 """
-function build_result(multimodularResultArr::CuArray{Int, 2}, primearray::Vector{Int}, crtType::DataType, resultType::DataType)
+function build_result(multimodularResultArr::CuArray{Int, 2}, crtPregen::CuArray{T, 2}, resultType::DataType) where T<:Integer
     # @assert size(multimodularResultArr, 1) == length(primearray) "number of rows of input array and number of primes must be equal"
 
-    result = crtType.(multimodularResultArr[1, :])
-    currmod = crtType(primearray[1])
+    result = T.(multimodularResultArr[1, :])
 
-    kernel = @cuda launch=false build_result_kernel(result, multimodularResultArr, 0, currmod, 0)
+    kernel = @cuda launch=false build_result_kernel(result, multimodularResultArr, crtPregen)
     config = launch_configuration(kernel.fun)
     threads = min(length(result), prevpow(2, config.threads))
     blocks = cld(length(result), threads)
 
-    for i in 2:size(multimodularResultArr, 1)
-        kernel(result, multimodularResultArr, i, currmod, primearray[i]; threads = threads, blocks = blocks)
-        currmod *= primearray[i]
-    end
+    kernel(result, multimodularResultArr, crtPregen; threads = threads, blocks = blocks)
 
     return resultType.(result)
 end
 
 """
-    build_result_kernel(result, multimodularResultArr, row, currmod, newprime)
+    build_result_kernel(result, multimodularResultArr, pregen)
 
 Kernel function for build_result()
 """
-function build_result_kernel(result, multimodularResultArr, row, currmod, newprime)
+function build_result_kernel(result, multimodularResultArr, pregen)
     idx = threadIdx().x + (blockIdx().x - 1) * blockDim().x
-    result[idx] = chinese_remainder_two(result[idx], currmod, multimodularResultArr[row, idx], newprime)
 
-    return
+    x = multimodularResultArr[1, idx]
+    for i in axes(pregen, 2)
+        x = mod(x * pregen[2, i] + multimodularResultArr[i + 1, idx] * pregen[1, i], pregen[3, i])
+    end
+    result[idx] = x
+
+    return 
 end

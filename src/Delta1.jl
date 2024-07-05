@@ -331,8 +331,6 @@ function delta1(hp::HomogeneousPolynomial, prime, pregen::Delta1Pregen)
     result
 end
 
-
-
 function test_delta1()
     coeffs = [1, 1, 1, 1]
     degrees = [
@@ -353,13 +351,13 @@ function test_delta1()
     println("Time to raise 4-variate polynomial to the 4th and 5th power for the first time: ")
     CUDA.@time result = delta1(polynomial1, 5, pregen)
 
-    println("Time to raise different 4-variate polynomial to the 6th and 7th power: ")
+    println("Time to raise different 4-variate polynomial to the 4th and 5th power: ")
     for i in 1:10
         println("Trial $i")
         CUDA.@time result2 = delta1(polynomial2, 5, pregen)
     end
 end
-    
+
 function test_bug()
 
     coeffs = [4, 4, 4, 2, 4, 3, 1]
