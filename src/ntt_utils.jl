@@ -14,49 +14,16 @@ import Base.div
 
 Not actually faster, but ensures result is positive.
 """
-@inline function faster_mod(x::Int, m::Int)::Int
+@inline function faster_mod(x::T, m::Integer)::T where T<:Integer
+    m = T(m)
     r = x - div(x, m) * m
     return r < 0 ? r + m : r
-end
-
-"""
-    faster_mod(a::Int128, b::Int128)::Int128
-
-mod function for Int128's that can be called inside CUDA kernels, since Base.mod can't
-"""
-function faster_mod(a::Int128, b::Int128)::Int128
-    # Handle edge cases
-    if b == 0
-        return a # Division by zero should not happen in kernel, return a for safety
-    elseif a == 0
-        return 0
-    end
-
-    abs_a = abs(a)
-    abs_b = abs(b)
-    
-    if abs_a < abs_b
-        return a
-    end
-
-    remainder = abs_a
-    b_bits = sizeof(Int128) * 8 - leading_zeros(abs_b)
-
-    for i in (sizeof(Int128) * 8 - leading_zeros(abs_a)):-1:b_bits
-        if remainder >= (abs_b << (i - b_bits))
-            remainder -= abs_b << (i - b_bits)
-        end
-    end
-
-    return a < 0 ? -remainder + b : remainder
 end
 
 """
     div(n::Int128, m::Int128)::Int128
 
 div function for Int128's that can be called inside CUDA kernels, since Base.div can't
-
-How do I get rid of the typepiracy warning?
 """
 function div(n::Int128, m::Int128)::Int128
     if n == 0
