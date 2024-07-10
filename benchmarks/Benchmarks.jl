@@ -79,6 +79,7 @@ end
 
 
 function benchmarks_gpu(samples, df)
+    println("BENCHMARKING FFT...")
     polys = read_benchmarks()
     gpu_data = convert_to_gpu_representation.(polys)
 
@@ -91,7 +92,7 @@ function benchmarks_gpu(samples, df)
         delta1(h, 5, pregen)
     end
   
-    println("BENCHMARKING FFT...")
+    
     df.FFT = zeros(Float64, samples)
     i = 1
     for data in gpu_data 
