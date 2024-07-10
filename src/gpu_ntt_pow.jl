@@ -91,7 +91,7 @@ function broadcast_pow!(arr::CuArray, primearray::Vector{Int}, pow::Int)
     function broadcast_pow_kernel!(arr, cu_primearray, pow)
         idx = threadIdx().x + (blockIdx().x - 1) * blockDim().x
         for i in axes(arr, 1)
-            arr[i, idx] = power_mod(arr[i, idx], pow, cu_primearray[i])
+            @inbounds arr[i, idx] = power_mod(arr[i, idx], pow, cu_primearray[i])
         end
 
         return
@@ -116,7 +116,7 @@ function gpu_intt(vec::CuArray{Int, 2}, pregen::GPUPowPregen)
     arg1 = vec[:, pregen.pregenButterfly]
     result = gpu_ntt!(arg1, pregen.primeArray, pregen.npruInverseArray, pregen.len, pregen.log2len)
 
-    for i in 1:length(pregen.primeArray)
+    @inbounds for i in 1:length(pregen.primeArray)
         # result[i, :] .= map(x -> faster_mod(x * mod_inverse(len, primearray[i]), primearray[i]), result[i, :])
         result[i, :] .*= pregen.lenInverseArray[i]
         result[i, :] .%= pregen.primeArray[i]
@@ -165,7 +165,7 @@ function gpu_ntt_kernel!(vec, primearray, theta_m, magic::Int, m2::Int)
     idx = threadIdx().x + (blockIdx().x - 1) * blockDim().x - 1
     k = Int(2 * m2 * (idx % magic) + floor(idx/magic))
 
-    for p in eachindex(primearray)
+    @inbounds for p in eachindex(primearray)
         theta = power_mod(theta_m[p], idx ÷ magic, primearray[p])
         t = theta * vec[p, k + m2 + 1]
         u = vec[p, k + 1]
@@ -206,7 +206,7 @@ function build_result_kernel(result, multimodularResultArr, pregen)
     idx = threadIdx().x + (blockIdx().x - 1) * blockDim().x
 
     x = multimodularResultArr[1, idx]
-    for i in axes(pregen, 2)
+    @inbounds for i in axes(pregen, 2)
         x = mod(x * pregen[2, i] + multimodularResultArr[i + 1, idx] * pregen[1, i], pregen[3, i])
     end
     result[idx] = x
