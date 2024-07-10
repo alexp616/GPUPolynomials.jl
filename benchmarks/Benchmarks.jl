@@ -1,10 +1,15 @@
 module Benchmarks
 
 using Oscar
+using CUDA
+using DataFrames
+using CSV
 
 # include("../experimental stuff/TrivialMultiply.jl")
 include("../src/Delta1.jl")
-include("../benchmarks/random_polynomial_generator.jl")
+include("random_polynomial_generator.jl")
+using .Delta1
+using .RandomPolynomialGenerator
 
 # for the Meta.parse thing to work, these have to be global varibles
 # admittedly, this is a bit of a hack.
@@ -39,7 +44,7 @@ function convert_to_gpu_representation(p)
 end
 
 
-function benchmarks_oscar()
+function benchmarks_oscar(df)
     polys = read_benchmarks()
 
     function oscar_delta1(poly, prime)
@@ -52,30 +57,28 @@ function benchmarks_oscar()
     lift1 = lift_to_ZZ(polys[1])
     lift1^5
 
-    answers = []
-    
+    samples = nrow(df)
+    df.Oscar = zeros(Float64, samples)
     println("BENCHMARKING OSCAR...")
-    # i = 1
-    open("benchmarks/oscar_benchmarks.txt", "w") do file
-        redirect_stdout(file) do
-            println("OSCAR BENCHMARKS")
-            for p in polys
-                # println("Benchmark $i:")
-                # i = i + 1
-                @time answer = oscar_delta1(p, 5)
+    i = 1
+    for p in polys
+        # println("Benchmark $i:")
+        
+        a = @timed oscar_delta1(p, 5)
+        df[i, :Oscar] = a.time
 
-                push!(answers,answer)
-            end
+        if i % (samples / 5) == 0
+            println("\tOSCAR $(i)/$(samples) DONE")
         end
+        i = i + 1
     end
+
     println("BENCHMARKING OSCAR FINISHED")
 
-    # display(answers)
-    answers
 end
 
 
-function benchmarks_gpu(samples)
+function benchmarks_gpu(samples, df)
     polys = read_benchmarks()
     gpu_data = convert_to_gpu_representation.(polys)
 
@@ -87,52 +90,34 @@ function benchmarks_gpu(samples)
     for i in 1:10
         delta1(h, 5, pregen)
     end
-
-    answers = []
   
     println("BENCHMARKING FFT...")
+    df.FFT = zeros(Float64, samples)
     i = 1
-    numTermsArray = zeros(1:samples)
-    open("benchmarks/fft_benchmarks.txt", "w") do file
-        redirect_stdout(file) do
-            println("FFT BENCHMARKS")
-            for data in gpu_data 
-                # println("Benchmark $i:")
-                # i = i + 1
-                
-                p = HomogeneousPolynomial(data[1],data[2])
-                numTermsArray[i] = length(p.coeffs)
-                CUDA.@time answer = delta1(p, 5, pregen)
-                push!(answers,answer)
-                i += 1
-            end
+    for data in gpu_data 
+        p = HomogeneousPolynomial(data[1],data[2])
+        df[i, :numTerms] = length(p.coeffs)
+        a = CUDA.@timed delta1(p, 5, pregen)
+        df[i, :FFT] = a.time
+
+        if i % (samples / 5) == 0
+            println("\tFFT $(i)/$(samples) DONE")
         end
+        i += 1
     end
     println("BENCHMARKING FFT FINISHED")
-
-    open("benchmarks/num_terms.txt", "w") do file
-        redirect_stdout(file) do
-            println("NUM TERMS")
-            for i in eachindex(numTermsArray) 
-                # println("Benchmark $i:")
-                # i = i + 1
-                println(Int(numTermsArray[i]))
-            end
-        end
-    end
-    answers
 end
 
 
 function run_all_benchmarks(numSamples)
+    println("Generating random polynomials...")
     RandomPolynomialGenerator.run(numSamples)
-    println("--------------GPU-------------")
-    # Because I'm a horrible programmer, benchmarks_gpu also writes the 
-    # corresponding number of terms for each benchmark
-    benchmarks_gpu(numSamples)
-    println("-------------Oscar------------")
-    benchmarks_oscar()
+    df = DataFrame(numTerms = fill(0, numSamples))
+    # Because I'm a horrible programmer, benchmarks_gpu also computes the corresponding number of terms for each benchmark
+    benchmarks_gpu(numSamples, df)
+    benchmarks_oscar(df)
 
+    CSV.write("benchmarks/benchmarks.csv", df)
     nothing # don't spam the terminal
 end
 
