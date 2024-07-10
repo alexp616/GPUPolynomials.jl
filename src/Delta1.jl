@@ -194,14 +194,16 @@ function kronecker_substitution(hp::HomogeneousPolynomial, pow::Int, pregen::Del
     key = hp.homogeneousDegree * pow + 1
 
     result = zeros(Int, pregen.inputLen1)
-    for termidx in eachindex(hp.coeffs)
-        # encoded = 1 because julia 1-indexing
-        encoded = 1
-        for d in 1:size(hp.degrees, 2) - 1
-            encoded += hp.degrees[termidx, d] * key ^ (d - 1)
-        end
+    @inbounds begin
+        for termidx in eachindex(hp.coeffs)
+            # encoded = 1 because julia 1-indexing
+            encoded = 1
+            for d in 1:size(hp.degrees, 2) - 1
+                encoded += hp.degrees[termidx, d] * key ^ (d - 1)
+            end
 
-        result[encoded] = hp.coeffs[termidx]
+            result[encoded] = hp.coeffs[termidx]
+        end
     end
 
     return result
@@ -293,9 +295,11 @@ Kernel function for change_polynomial_encoding()
 function change_polynomial_encoding_kernel(source, dest, key1, key2, numVars)
     tid = threadIdx().x + (blockIdx().x - 1) * blockDim().x
 
-    if tid <= length(source)
-        resultidx = change_encoding(tid - 1, key1, key2, numVars - 1) + 1
-        dest[resultidx] = source[tid]
+    @inbounds begin
+        if tid <= length(source)
+            resultidx = change_encoding(tid - 1, key1, key2, numVars - 1) + 1
+            dest[resultidx] = source[tid]
+        end
     end
 
     return
@@ -355,7 +359,7 @@ end
 """
     generate_compositions(n, k)
 
-Escaped hypertriangle code because still useful for generating starting degrees
+Escaped hypertriangle code because still useful for generating all possible monomials
 """
 function generate_compositions(n, k, type::DataType = Int64)
     compositions = zeros(type, binomial(n + k - 1, k - 1), k)
@@ -447,6 +451,7 @@ function test_delta1()
         println("Trial $i")
         CUDA.@time result2 = delta1(polynomial2, 5, pregen)
     end
+    CUDA.@profile result = delta1(polynomial1, 5, pregen)
 end
 
 end

@@ -205,11 +205,13 @@ Kernel function for build_result()
 function build_result_kernel(result, multimodularResultArr, pregen)
     idx = threadIdx().x + (blockIdx().x - 1) * blockDim().x
 
-    x = multimodularResultArr[1, idx]
-    @inbounds for i in axes(pregen, 2)
-        x = mod(x * pregen[2, i] + multimodularResultArr[i + 1, idx] * pregen[1, i], pregen[3, i])
+    @inbounds begin
+        x = multimodularResultArr[1, idx]
+        for i in axes(pregen, 2)
+            x = mod(x * pregen[2, i] + multimodularResultArr[i + 1, idx] * pregen[1, i], pregen[3, i])
+        end
+        result[idx] = x
     end
-    result[idx] = x
 
     return 
 end
