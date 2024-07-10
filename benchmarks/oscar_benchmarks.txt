@@ -1,0 +1,11 @@
+OSCAR BENCHMARKS
+  0.550434 seconds (3.66 k allocations: 2.842 MiB)
+  0.170435 seconds (1.88 k allocations: 1.418 MiB)
+  0.631426 seconds (4.02 k allocations: 3.139 MiB)
+  0.277669 seconds (2.48 k allocations: 1.891 MiB)
+  0.300605 seconds (2.79 k allocations: 2.146 MiB)
+  0.229619 seconds (2.37 k allocations: 1.805 MiB)
+  0.552624 seconds (3.73 k allocations: 2.905 MiB)
+  0.550933 seconds (3.54 k allocations: 2.749 MiB)
+  0.647718 seconds (3.99 k allocations: 3.115 MiB)
+  0.671785 seconds (3.93 k allocations: 3.069 MiB, 2.76% gc time)
