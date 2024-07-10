@@ -1,5 +1,10 @@
+module Delta1
+
 include("gpu_ntt_pow.jl")
 using Random
+
+export HomogeneousPolynomial, random_homogeneous_polynomial, pretty_string, Delta1Pregen, pregen_delta1, delta1
+
 
 """
     HomogeneousPolynomial
@@ -442,4 +447,6 @@ function test_delta1()
         println("Trial $i")
         CUDA.@time result2 = delta1(polynomial2, 5, pregen)
     end
+end
+
 end
