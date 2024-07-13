@@ -1,7 +1,7 @@
 using CUDA
 using Statistics
 
-function matrix_sort(arr::CuVector{T}) where T<:Integer
+function matrix_sort(arr::CuVector{T}) where T<:Real
     matrixDim = ceil(Int, sqrt(length(arr)))
     padding = matrixDim ^ 2 - length(arr)
     matrix = reshape(vcat(arr, CUDA.fill(typemax(T), padding)), matrixDim, matrixDim)
@@ -11,24 +11,24 @@ function matrix_sort(arr::CuVector{T}) where T<:Integer
     sort!(matrix, dims = 2)
 
     # Counting sort thing
-    kernel3 = @cuda launch=false count_less_than_kernel!(matrix, result)
-    config3 = launch_configuration(kernel3.fun)
-    temp = floor(Int, sqrt(config3.threads))
-    threads3 = min(size(matrix), (temp, temp))
-    blocks3 = cld.(size(matrix), threads3)
+    kernel = @cuda launch=false count_less_than_kernel!(matrix, result)
+    config = launch_configuration(kernel.fun)
+    temp = floor(Int, sqrt(config.threads))
+    threads = min(size(matrix), (temp, temp))
+    blocks = cld.(size(matrix), threads)
 
     CUDA.@sync blocking = true begin
-        kernel3(matrix, result; threads = threads3, blocks = blocks3)
+        kernel(matrix, result; threads = threads, blocks = blocks)
     end
 
     return result[1:length(arr)]
 end
 
-function count_less_than_kernel!(matrix, result)
+function count_less_than_kernel!(matrix::CuDeviceArray{T}, result::CuDeviceVector{T}) where T<:Real
     idxcol = threadIdx().x + (blockIdx().x - 1) * blockDim().x
     idxrow = threadIdx().y + (blockIdx().y - 1) * blockDim().y
 
-    if idxrow <= size(matrix, 1) && idxcol <= size(matrix, 2)
+    @inbounds if idxrow <= size(matrix, 1) && idxcol <= size(matrix, 2)
         less = idxcol * idxrow - 1
         X = matrix[idxrow, idxcol]
 
@@ -63,6 +63,7 @@ function run_benchmarks()
     for _ in 1:4
         cudajltimes = []
         matrixsorttimes = []
+        cputimes = []
         for i in 1:15
             B = CuArray(rand(1:len, len))
             sfsf = CUDA.@timed sort!(B)
@@ -71,16 +72,26 @@ function run_benchmarks()
             C = CuArray(rand(1:len, len))
             dfdf = CUDA.@timed matrix_sort(C)
             push!(matrixsorttimes, dfdf.time)
+
+            D = cu(rand(1:len, len); unified = true)
+            E = unsafe_wrap(Array, D)
+            afaf = @timed sort!(E)
+            push!(cputimes, afaf.time)
         end
 
+        # get rid of priming jitter value
         deleteat!(cudajltimes, 1)
         deleteat!(matrixsorttimes, 1)
+        deleteat!(cputimes, 1)
 
         println("average time to sort $len elements with matrix_sort!(): ")
         println("$(mean(cudajltimes)) s")
 
         println("average time to sort $len elements with CUDA.sort!(): ")
         println("$(mean(matrixsorttimes)) s")
+
+        println("average time to sort $len elements with cpu and unified memory: ")
+        println("$(mean(cputimes)) s")
         println("")
         len *= 10
     end
