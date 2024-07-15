@@ -1,5 +1,6 @@
 using CUDA
 using BenchmarkTools
+using BitIntegers
 
 @inline function faster_mod(x::T, m::T)::T where T<:Integer
     r = T(x - div(x, m) * m)
@@ -33,6 +34,34 @@ function div(n::Int128, m::Int128)
     return quotient * sign
 end
 
+function div(n::Int256, m::Int256) 
+    # if n == 0
+    #     return Int256(0)
+    # end
+
+    sign = 1
+    # if (n < 0) != (m < 0)
+    #     sign = -1
+    # end
+
+    # n = abs(n)
+    # m = abs(m)
+
+    quotient = Int256(0)
+    remainder = Int256(0)
+
+    # for i in 0:255
+    #     remainder = (remainder << 1) | ((n >> (255 - i)) & 1)
+    #     if remainder >= m
+    #         remainder -= m
+    #         quotient |= (Int256(1) << (255 - i))
+    #     end
+    # end
+
+    # return quotient * sign
+    return 0
+end
+
 
 function reduce_mod_m_kernel(arr::CuDeviceVector{Int128, 1}, m::Int128)
     idx = threadIdx().x + (blockIdx().x - 1) * blockDim().x
@@ -44,9 +73,9 @@ function reduce_mod_m_kernel(arr::CuDeviceVector{Int128, 1}, m::Int128)
     return
 end
 
-function div_m_kernel(arr::CuDeviceVector{Int128, 1}, m::Int128)
+function div_m_kernel(arr::CuDeviceVector{T, 1}, m::T) where T<:Integer
     idx = threadIdx().x + (blockIdx().x - 1) * blockDim().x
-    arr[idx] = div(arr[idx], m)
+    a = div(arr[idx], m)
 
     return
 end
@@ -66,8 +95,8 @@ function test_broken_mod()
 end
 
 function test_broken_div()
-    arr = CuArray(Int128.([10, 20, 30, 40]))
-    m = Int128(7)
+    arr = CuArray(Int256.([10]))
+    m = Int256(7)
 
     # ERROR: LLVM error: Undefined external symbol "__divti3"
     @cuda(

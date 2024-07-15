@@ -161,7 +161,7 @@ end
 
 Kernel function for gpu_ntt!()
 """
-function gpu_ntt_kernel!(vec, primearray, theta_m, magic::Int, m2::Int)
+function gpu_ntt_kernel!(vec::CuDeviceArray{Int}, primearray::CuDeviceVector{Int}, theta_m::CuDeviceVector{Int}, magic::Int, m2::Int)
     idx = threadIdx().x + (blockIdx().x - 1) * blockDim().x - 1
     k = Int(2 * m2 * (idx % magic) + floor(idx/magic))
 
@@ -202,7 +202,7 @@ end
 
 Kernel function for build_result()
 """
-function build_result_kernel(result, multimodularResultArr, pregen)
+function build_result_kernel(result::CuDeviceVector, multimodularResultArr::CuDeviceArray{Int, 2}, pregen::CuDeviceArray)
     idx = threadIdx().x + (blockIdx().x - 1) * blockDim().x
 
     @inbounds begin

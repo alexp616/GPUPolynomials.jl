@@ -219,7 +219,7 @@ function decode_kronecker_substitution(arr, key, numVars, totalDegree)
     indices = accumulate(+, flags)
 
     # there must be a faster way to do this
-    resultLen = Array(indices)[end]
+    CUDA.@allowscalar resultLen = indices[end]
 
     resultCoeffs = CUDA.zeros(Int, resultLen)
     resultDegrees = CUDA.zeros(Int, resultLen, numVars)
