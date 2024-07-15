@@ -1,7 +1,7 @@
 using CUDA
 using BenchmarkTools
 
-function cpu_merge(arr1::Vector{T}, arr2::Vector{T}) where T<:Integer
+function cpu_merge(arr1::Vector{T}, arr2::Vector{T}) where T<:Real
     result = zeros(T, length(arr1) + length(arr2))
     idx1, idx2 = 1, 1
     for i in eachindex(result)
@@ -25,7 +25,7 @@ function cpu_merge(arr1::Vector{T}, arr2::Vector{T}) where T<:Integer
     return result
 end
 
-function gpu_merge(arr1::CuVector{T}, arr2::CuVector{T}) where T<:Integer
+function gpu_merge(arr1::CuVector{T}, arr2::CuVector{T}) where T<:Real
     resultLen = length(arr1) + length(arr2)
     result = CUDA.zeros(T, resultLen)
     # 10 values per thread because why not
@@ -116,7 +116,7 @@ end
 
 function test_gpu_merge()
 
-    for num in [1000, 10000, 1000000, 10000000, 100000000, 1000000000]
+    for num in [10000000, 100000000, 1000000000]
         arr1 = rand(1:num, num)
         arr2 = rand(1:num, num)
 

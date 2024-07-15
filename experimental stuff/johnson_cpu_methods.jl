@@ -2,18 +2,18 @@ import Base.+
 import Base.*
 
 
-mutable struct Polynomial
+mutable struct SparsePolynomial
     coeffs::Vector{Int}
-    degrees::Vector{Int}
+    encodedDegrees::Vector{Int}
     numTerms::Int
 
-    function Polynomial(coeffs::Vector{Int}, degrees::Vector{Int})
-        @assert length(coeffs) == length(degrees)
-        new(coeffs, degrees, length(coeffs))
+    function SparsePolynomial(coeffs::Vector{Int}, encodedDegrees::Vector{Int})
+        @assert length(coeffs) == length(encodedDegrees)
+        new(coeffs, encodedDegrees, length(coeffs))
     end
 end
 
-function +(p1::Polynomial, p2::Polynomial)::Polynomial
+function +(p1::SparsePolynomial, p2::SparsePolynomial)::SparsePolynomial
     # Pre-allocate sufficiently large array to avoid out of boundsing and append!()
     resultCoeffs = zeros(Int, p1.numTerms + p2.numTerms)
     resultDegrees = zeros(Int, p1.numTerms + p2.numTerms)
@@ -25,13 +25,13 @@ function +(p1::Polynomial, p2::Polynomial)::Polynomial
 
     while i <= p1.numTerms && j <= p2.numTerms
         k += 1
-        if p1.degrees[i] < p2.degrees[j]
+        if p1.encodedDegrees[i] < p2.encodedDegrees[j]
             resultCoeffs[k] = p2.coeffs[j]
-            resultDegrees[k] = p2.degrees[j]
+            resultDegrees[k] = p2.encodedDegrees[j]
             j += 1
-        elseif p1.degrees[i] == p2.degrees[j]
+        elseif p1.encodedDegrees[i] == p2.encodedDegrees[j]
             resultCoeffs[k] = p1.coeffs[i] + p2.coeffs[j]
-            resultDegrees[k] = p1.degrees[i]
+            resultDegrees[k] = p1.encodedDegrees[i]
             if resultCoeffs[k] == 0
                 k -= 1
             end
@@ -39,7 +39,7 @@ function +(p1::Polynomial, p2::Polynomial)::Polynomial
             j += 1
         else
             resultCoeffs[k] = p1.coeffs[i]
-            resultDegrees[k] = p1.degrees[i]
+            resultDegrees[k] = p1.encodedDegrees[i]
             i += 1
         end
 
@@ -47,47 +47,47 @@ function +(p1::Polynomial, p2::Polynomial)::Polynomial
     while i <= p1.numTerms
         k += 1
         resultCoeffs[k] = p1.coeffs[i]
-        resultDegrees[k] = p1.degrees[i]
+        resultDegrees[k] = p1.encodedDegrees[i]
         i += 1
     end
     while j <= p2.numTerms
         k += 1
         resultCoeffs[k] = p2.coeffs[j]
-        resultDegrees[k] = p2.degrees[j]
+        resultDegrees[k] = p2.encodedDegrees[j]
         j += 1
     end
 
-    return Polynomial(resultCoeffs[1:k], resultDegrees[1:k])
+    return SparsePolynomial(resultCoeffs[1:k], resultDegrees[1:k])
 end
 
 function test_cpu_add()
-    f = Polynomial([1, 2, -3, 4, 1], [9, 7, 5, 2, 0])
-    g = Polynomial([3, 2, 3, 2, 1], [5, 3, 2, 1, 0])
+    f = SparsePolynomial([1, 2, -3, 4, 1], [9, 7, 5, 2, 0])
+    g = SparsePolynomial([3, 2, 3, 2, 1], [5, 3, 2, 1, 0])
 
     f + g
 end
 
-function *(p1::Polynomial, p2::Polynomial)::Polynomial
+function *(p1::SparsePolynomial, p2::SparsePolynomial)::SparsePolynomial
     if p1.numTerms == 0 || p2.numTerms == 0
-        return Polynomial(Int[], Int[])
+        return SparsePolynomial(Int[], Int[])
     end
 
     resultCoeffs = zeros(Int, p1.numTerms * p2.numTerms)
     resultDegrees = zeros(Int, p1.numTerms * p2.numTerms)
 
     k = 1
-    resultDegrees[1] = p1.degrees[1] + p2.degrees[1]
+    resultDegrees[1] = p1.encodedDegrees[1] + p2.encodedDegrees[1]
 
     F = ones(Int, p1.numTerms)
     I = 1
     while I <= p1.numTerms
-        s = find_an_s(I, p1.numTerms, F, p1.degrees, p2.degrees)
-        if resultDegrees[k] != p1.degrees[s] + p2.degrees[F[s]]
+        s = find_an_s(I, p1.numTerms, F, p1.encodedDegrees, p2.encodedDegrees)
+        if resultDegrees[k] != p1.encodedDegrees[s] + p2.encodedDegrees[F[s]]
             if resultCoeffs[k] != 0
                 k += 1
                 resultCoeffs[k] = 0
             end
-            resultDegrees[k] = p1.degrees[s] + p2.degrees[F[s]]
+            resultDegrees[k] = p1.encodedDegrees[s] + p2.encodedDegrees[F[s]]
         end
         resultCoeffs[k] += p1.coeffs[s] * p2.coeffs[F[s]]
         F[s] += 1
@@ -96,14 +96,14 @@ function *(p1::Polynomial, p2::Polynomial)::Polynomial
         end
     end
 
-    return Polynomial(resultCoeffs[1:k], resultDegrees[1:k])
+    return SparsePolynomial(resultCoeffs[1:k], resultDegrees[1:k])
 end
 
-function find_an_s(I, n, F, degrees1, degrees2)
+function find_an_s(I, n, F, encodedDegrees1, encodedDegrees2)
     currMaxS = I
-    currMaxDegree = degrees1[I] + degrees2[F[I]]
+    currMaxDegree = encodedDegrees1[I] + encodedDegrees2[F[I]]
     for s in I + 1:n
-        if degrees1[s] + degrees2[F[s]] > currMaxDegree
+        if encodedDegrees1[s] + encodedDegrees2[F[s]] > currMaxDegree
             currMaxS = s
         end
     end
@@ -112,8 +112,8 @@ function find_an_s(I, n, F, degrees1, degrees2)
 end
 
 function test_cpu_multiply()
-    f = Polynomial([1, 4, 1], [5, 2, 0])
-    g = Polynomial([2, 3, 2], [3, 2, 1])
+    f = SparsePolynomial([1, 4, 1], [5, 2, 0])
+    g = SparsePolynomial([2, 3, 2], [3, 2, 1])
 
     f * g
 end

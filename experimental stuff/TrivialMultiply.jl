@@ -1,46 +1,32 @@
+module TrivialMultiply
+
 using CUDA
 include("ReduceByKey.jl")
-include("PolynomialModule.jl")
+include("Polynomials.jl")
 include("utils.jl")
 
 using BenchmarkTools
+using .Polynomials
 
-using .PolynomialModule
-CUDA.allowscalar(false)
 
-# The CUDA command that gives the max number of supported threads per block returns 738 for my machine, but
-# when I actually try to run code with 738 threads it says I requested too many resources
-global MAX_THREADS_PER_BLOCK = 512
+export trivial_multiply, raise_sparse_to_power, raise_to_power
 
 # make p2 the polynomial with less terms
-function trivial_multiply(p1::PolynomialModule.EncodedDevicePolynomial{T}, p2::PolynomialModule.EncodedDevicePolynomial{T}, mod = -1) where {T<:Real}
-
+function trivial_multiply(p1::SparseDevicePolynomial{T}, p2::SparseDevicePolynomial{T}, mod = -1) where {T<:Real}
     numEndingUnreducedTerms = p1.numTerms * p2.numTerms
     unreducedResultLength = next_pow_2(numEndingUnreducedTerms) + 1
 
     cu_unreducedResultCoeffs = CUDA.zeros(T, unreducedResultLength)
-    cu_unreducedResultDegrees = CUDA.zeros(UInt64, unreducedResultLength)
+    cu_unreducedResultDegrees = CUDA.zeros(Int, unreducedResultLength)
 
-    nthreads = min(MAX_THREADS_PER_BLOCK, numEndingUnreducedTerms)
-    nblocks = fld(numEndingUnreducedTerms, nthreads)
+    kernel = @cuda launch = false trivial_multiply_kernel!(CuArray(p1.coeffs), CuArray(p1.encodedDegrees), CuArray(p2.coeffs), CuArray(p2.encodedDegrees), cu_unreducedResultCoeffs, cu_unreducedResultDegrees, p2.numTerms, numEndingUnreducedTerms)
+    config = launch_configuration(kernel.fun)
+    threads = min(numEndingUnreducedTerms, config.threads)
+    blocks = cld(numEndingUnreducedTerms, threads)
 
-    threadsInLastBlock = numEndingUnreducedTerms - nthreads * nblocks
+    kernel(CuArray(p1.coeffs), CuArray(p1.encodedDegrees), CuArray(p2.coeffs), CuArray(p2.encodedDegrees), cu_unreducedResultCoeffs, cu_unreducedResultDegrees, p2.numTerms, numEndingUnreducedTerms; threads = threads, blocks = blocks)
 
-    if (threadsInLastBlock > 0)
-        @cuda(
-            threads = threadsInLastBlock,
-            blocks = 1,
-            trivial_multiply_kernel!(CuArray(p1.coeffs), CuArray(p1.encodedDegrees), CuArray(p2.coeffs), CuArray(p2.encodedDegrees), cu_unreducedResultCoeffs, cu_unreducedResultDegrees, p2.numTerms, nthreads * nblocks)
-        )
-    end
-
-    CUDA.@sync @cuda(
-        threads = nthreads,
-        blocks = nblocks,
-        trivial_multiply_kernel!(CuArray(p1.coeffs), CuArray(p1.encodedDegrees), CuArray(p2.coeffs), CuArray(p2.encodedDegrees), cu_unreducedResultCoeffs, cu_unreducedResultDegrees, p2.numTerms, 0)
-    )
-
-    # For some reason, this blows up when we try to use Int128's
+    # For some reason, this blows up when we try to use Int128's (i know why now)
     if mod > 1
         reduce_mod_m(cu_unreducedResultCoeffs, mod)
     end
@@ -59,114 +45,139 @@ function trivial_multiply(p1::PolynomialModule.EncodedDevicePolynomial{T}, p2::P
         reduce_mod_m(cu_reducedResultCoeffs, mod)
     end
 
-    return PolynomialModule.EncodedDevicePolynomial(cu_reducedResultCoeffs, cu_reducedResultDegrees, p1.maxResultingDegree, length(cu_reducedResultCoeffs))
+    return SparseDevicePolynomial(cu_reducedResultCoeffs, cu_reducedResultDegrees, p1.key, length(cu_reducedResultCoeffs))
 end
 
-function trivial_multiply_kernel!(coeffs1, degrees1, coeffs2, degrees2, result_coeffs, result_degrees, length2, offset)
-    tid = threadIdx().x + (blockIdx().x - 1) * blockDim().x + offset
-    idx1 = cld(tid, length2)
-    idx2 = tid - (idx1 - 1) * length2
+function trivial_multiply_kernel!(coeffs1, degrees1, coeffs2, degrees2, result_coeffs, result_degrees, length2, numEndingUnreducedTerms)
+    tid = threadIdx().x + (blockIdx().x - 1) * blockDim().x
+    if tid <= numEndingUnreducedTerms
+        idx1 = cld(tid, length2)
+        idx2 = tid - (idx1 - 1) * length2
 
-    if coeffs1[idx1] == 0
-        result_coeffs[tid] = 0
-        result_degrees[tid] = 0
-    else
-        result_coeffs[tid] = coeffs1[idx1] * coeffs2[idx2]
-        result_degrees[tid] = degrees1[idx1] + degrees2[idx2]
-    end
-
-    return nothing
-end
-
-function raise_to_power(p::PolynomialModule.HostPolynomial{T}, n::Int, mod = -1)::PolynomialModule.HostPolynomial{T} where {T<:Real}
-    # Only takes positive integer n>=1
-    bitarr = to_bits(n)
-
-    encodedResult = PolynomialModule.EncodedDevicePolynomial(CuArray(T.([1])), CuArray(UInt64.([0])), p.maxResultingDegree, 1)
-    temp = PolynomialModule.EncodedDevicePolynomial(p)
-
-    for i in 1:length(bitarr) - 1
-        if bitarr[i] == 1
-            encodedResult = trivial_multiply(temp, encodedResult, mod)
+        @inbounds begin
+            if coeffs1[idx1] == 0
+                result_coeffs[tid] = 0
+                result_degrees[tid] = 0
+            else
+                result_coeffs[tid] = coeffs1[idx1] * coeffs2[idx2]
+                result_degrees[tid] = degrees1[idx1] + degrees2[idx2]
+            end
         end
-        temp = trivial_multiply(temp, PolynomialModule.EncodedDevicePolynomial(copy(temp.coeffs), copy(temp.encodedDegrees), temp.maxResultingDegree, temp.numTerms), mod)
     end
 
-    encodedResult = trivial_multiply(temp, encodedResult, mod)
-
-    return PolynomialModule.HostPolynomial(encodedResult, p.numVars)
+    return 
 end
 
-function to_bits(n)
-    bits = [0 for _ in 1:floor(Int, log2(n)) + 1]
-    for i in eachindex(bits)
-        bits[i] = n & 1
-        n >>= 1
+function raise_sparse_to_power(p::SparseDevicePolynomial{T}, n::Int, mod = -1)::SparseDevicePolynomial{T} where {T<:Real}
+    if n == 0
+        return SparseDevicePolynomial(CuArray([1]), CuArray([0]), p.key, 1)
     end
-    return bits
+
+    temp = copy(p)
+    for i in 2:n
+        temp = trivial_multiply(temp, p)
+    end
+    return temp
 end
 
+function raise_to_power(p::HostPolynomial{T}, n::Int, mod = -1)::HostPolynomial{T} where {T<:Real}
+    sparsep = SparseDevicePolynomial(p)
+    result = raise_sparse_to_power(sparsep, n, mod)
 
+    return HostPolynomial(result, p.numVars)
+end
 
-# EXAMPLE USAGE
+function generate_compositions(n, k, type::DataType = Int64)
+    compositions = zeros(type, binomial(n + k - 1, k - 1), k)
+    current_composition = zeros(type, k)
+    current_composition[1] = n
+    idx = 1
+    while true
+        compositions[idx, :] .= current_composition
+        idx += 1
+        v = current_composition[k]
+        if v == n
+            break
+        end
+        current_composition[k] = 0
+        j = k - 1
+        while 0 == current_composition[j]
+            j -= 1
+        end
+        current_composition[j] -= 1
+        current_composition[j + 1] = 1 + v
+    end
 
-# Corresponds to x^4 + y^4 + z^4 + w^4
-# coeffs = [1, 1, 1, 1]
-# degrees = [
-#     1 0 0 0
-#     0 1 0 0
-#     0 0 1 0
-#     0 0 0 1
-# ]
+    return compositions
+end
 
-#=
-degrees = generate_compositions(4, 4)
-coeffs = [4 for _ in 1:size(degrees, 1)]
+function test_trivial_multiply()
+    degrees = generate_compositions(4, 4)
+    coeffs = [rand(1:4) for _ in 1:size(degrees, 1)]
 
-polynomial = PolynomialModule.HostPolynomial(coeffs, degrees, 81)
+    polynomial = HostPolynomial(coeffs, degrees, 81)
 
-println("raising to the 4th power:")
-polynomial2 = raise_to_power(polynomial, 4)
+    println("Time for first step: ")
+    CUDA.@time polynomial2 = raise_to_power(polynomial, 4, 5)
 
-println(maximum(polynomial2.coeffs))
-=#
+    polynomial2.coeffs .%= 5
+    println("Time for second step: ")
+    CUDA.@time polynomial3 = raise_to_power(polynomial2, 5)
+end
 
+function binb_raise_to_power(p::SparseDevicePolynomial{T}, n::Int) where T<:Real
+    sort_keys_with_values(p.encodedDegrees, p.coeffs)
 
-# maxpolynomial2 = PolynomialModule.HostPolynomial([4 for _ in 1:polynomial2.numTerms], polynomial2.degrees)
-# println("raising $(polynomial2.numTerms) terms to the 5th power:")
-# polynomial3 = raise_to_power(maxpolynomial2, 5)
-# maxcoeff, idx = findmax(polynomial3.coeffs)
-# maxdegrees = Int.((polynomial3.degrees)[idx, :])
-# println("max coeff: ", maxcoeff)
-# println("max coeff's variables: ", maxdegrees)
-# println("number of terms: $(polynomial3.numTerms)")
+    gterms = div(p.numTerms, 2)
+    hterms = p.numTerms - gterms
+    g = SparseDevicePolynomial(p.coeffs[1:gterms], p.encodedDegrees[1:gterms], p.key, gterms)
+    h = SparseDevicePolynomial(p.coeffs[gterms + 1:hterms], p.encodedDegrees[gterms + 1:hterms], p.key, hterms)
 
+    one = SparseDevicePolynomial(CuArray([1]), CuArray([1]), p.key, 1)
 
-# println("raising $(polynomial2.numTerms) terms to the 5th power:")
-# # polynomial3 = raise_to_power(polynomial2, 5)
-# CUDA.@profile raise_to_power(polynomial2, 5)
-# # println("Resulting polynomial has $(polynomial3.numTerms) terms")
+    gpowers = Array{SparseDevicePolynomial{T}}(undef, n + 1)
+    hpowers = Array{SparseDevicePolynomial{T}}(undef, n + 1)
 
+    gpowers[1] = one
+    hpowers[1] = one
 
+    gpowers[2] = g
+    hpowers[2] = h
 
+    for i in 2:n
+        gpowers[i + 1] = trivial_multiply(gpowers[i], g)
+        hpowers[i + 1] = trivial_multiply(hpowers[i], h)
+    end
 
+    for i in 0:n
+        gpowers[i + 1].coeffs .*= binomial(n, i)
+    end
 
+    prods = Array{SparseDevicePolynomial{T}}(undef, n + 1)
 
+    for i in 0:n
+        prods[i + 1] = trivial_multiply(gpowers[i + 1], hpowers[n + 1 - i])
+    end
 
-# # Construct Polynomial object
-# polynomial = PolynomialModule.HostPolynomial(coeffs, degrees)
+    prods = SparsePolynomial.(prods)
 
-# # Raise to the 4th power mod 5
-# polynomial2 = raise_to_power(polynomial, 4, 5)
-# println(polynomial2.numTerms)
-# # @btime raise_to_power(polynomial, 4, 5)
-# println(Int.(polynomial2.degrees)[1:20, :])
-# raise_to_power(polynomial, 4, 5)
-# # Raise to the 5th power
-# polynomial3 = raise_to_power(polynomial2, 5)
-# println(Int.(polynomial3.degrees)[1:20, :])
-# @btime raise_to_power(polynomial2, 5)
+    result = prods[1]
+    for i in 2:n + 1
+        result = add(result, prods[i])
+    end
 
-# # Corresponds to sum of all possible homogeneous terms of degree 4 and 4 variables
-# # degrees = [4 0 0 0; 3 1 0 0; 3 0 1 0; 3 0 0 1; 2 2 0 0; 2 1 1 0; 2 1 0 1; 2 0 2 0; 2 0 1 1; 2 0 0 2; 1 3 0 0; 1 2 1 0; 1 2 0 1; 1 1 2 0; 1 1 1 1; 1 1 0 2; 1 0 3 0; 1 0 2 1; 1 0 1 2; 1 0 0 3; 0 4 0 0; 0 3 1 0; 0 3 0 1; 0 2 2 0; 0 2 1 1; 0 2 0 2; 0 1 3 0; 0 1 2 1; 0 1 1 2; 0 1 0 3; 0 0 4 0; 0 0 3 1; 0 0 2 2; 0 0 1 3; 0 0 0 4]
-# # coeffs = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+    return result
+end
+
+function test_binb()
+    degrees = generate_compositions(4, 4)
+    coeffs = [rand(1:4) for _ in 1:size(degrees, 1)]
+
+    polynomial = HostPolynomial(coeffs, degrees, 81)
+    sparsePolynomial = SparseDevicePolynomial(polynomial)
+
+    println("Time for first step: ")
+    CUDA.@time binb_raise_to_power(sparsePolynomial, 4)
+end
+
+end
