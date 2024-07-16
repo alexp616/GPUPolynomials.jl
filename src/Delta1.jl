@@ -313,7 +313,7 @@ function delta1(hp::HomogeneousPolynomial, prime, pregen::Delta1Pregen)
     result
 end
 
-function test_delta1()
+function test_delta1(numTrials = 10)
     coeffs = [1, 1, 1, 1]
     degrees = [
         4 0 0 0
@@ -330,22 +330,13 @@ function test_delta1()
     println("Time to raise 4-variate polynomial to the 4th and 5th power for the first time: ")
     CUDA.@time result = delta1(polynomial1, 5, pregen)
 
-
-    allPossibleMonomials = [4 0 0 0; 3 1 0 0; 3 0 1 0; 3 0 0 1; 2 2 0 0; 2 1 1 0; 2 1 0 1; 2 0 2 0; 2 0 1 1; 2 0 0 2; 1 3 0 0; 1 2 1 0; 1 2 0 1; 1 1 2 0; 1 1 1 1; 1 1 0 2; 1 0 3 0; 1 0 2 1; 1 0 1 2; 1 0 0 3; 0 4 0 0; 0 3 1 0; 0 3 0 1; 0 2 2 0; 0 2 1 1; 0 2 0 2; 0 1 3 0; 0 1 2 1; 0 1 1 2; 0 1 0 3; 0 0 4 0; 0 0 3 1; 0 0 2 2; 0 0 1 3; 0 0 0 4]
     println("Time to raise different 4-variate polynomials to the 4th and 5th power: ")
-    for i in 1:10
-        degrees2 = Array{Int}(undef, 1, 4)
-        for monNum in axes(allPossibleMonomials, 1)
-            if rand((0, 1)) == 1
-                degrees2 = vcat(degrees2, allPossibleMonomials[monNum, :]')
-            end
-        end
-        degrees2 = degrees2[2:end, :]
-        polynomial2 = HomogeneousPolynomial(rand(1:4, size(degrees2, 1)), degrees2)
+    for i in 1:numTrials
+        polynomial2 = random_homogeneous_polynomial(4, rand(1:35), 5)
         println("Trial $i")
         CUDA.@time result2 = delta1(polynomial2, 5, pregen)
     end
-    CUDA.@profile result = delta1(polynomial1, 5, pregen)
+    # CUDA.@profile result = delta1(polynomial1, 5, pregen)
 end
 
 end

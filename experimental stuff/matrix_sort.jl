@@ -1,6 +1,6 @@
 module MatrixSort
 
-export matrix_sort!, matrix_sortperm
+export matrix_sort!
 using CUDA
 using Statistics
 
@@ -14,6 +14,7 @@ function matrix_sort!(arr::CuVector{T}) where T<:Real
     sort!(matrix; dims = 1)
     sort!(matrix; dims = 2)
 
+    display(matrix)
     # Counting sort thing
     kernel = @cuda launch=false count_less_than_kernel!(matrix, result)
     config = launch_configuration(kernel.fun)
@@ -57,6 +58,7 @@ function count_less_than_kernel!(matrix::CuDeviceArray{T}, result::CuDeviceVecto
                 r3 += 1
             end
         end
+        
         result[less + 1] = X
     end
 

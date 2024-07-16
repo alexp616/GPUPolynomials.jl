@@ -35,31 +35,30 @@ function div(n::Int128, m::Int128)
 end
 
 function div(n::Int256, m::Int256) 
-    # if n == 0
-    #     return Int256(0)
-    # end
+    if n == 0
+        return Int256(0)
+    end
 
     sign = 1
-    # if (n < 0) != (m < 0)
-    #     sign = -1
-    # end
+    if (n < 0) != (m < 0)
+        sign = -1
+    end
 
-    # n = abs(n)
-    # m = abs(m)
+    n = abs(n)
+    m = abs(m)
 
     quotient = Int256(0)
     remainder = Int256(0)
 
-    # for i in 0:255
-    #     remainder = (remainder << 1) | ((n >> (255 - i)) & 1)
-    #     if remainder >= m
-    #         remainder -= m
-    #         quotient |= (Int256(1) << (255 - i))
-    #     end
-    # end
+    for i in 0:255
+        remainder = (remainder << 1) | ((n >> (255 - i)) & 1)
+        if remainder >= m
+            remainder -= m
+            quotient |= (Int256(1) << (255 - i))
+        end
+    end
 
-    # return quotient * sign
-    return 0
+    return quotient * sign
 end
 
 
@@ -98,7 +97,6 @@ function test_broken_div()
     arr = CuArray(Int256.([10]))
     m = Int256(7)
 
-    # ERROR: LLVM error: Undefined external symbol "__divti3"
     @cuda(
         threads = length(arr),
         blocks = 1,

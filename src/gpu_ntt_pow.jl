@@ -58,7 +58,6 @@ function gpu_pow(vec::CuVector{Int}, pow::Int; pregen::GPUPowPregen)
 
     # Broadcasting power
     broadcast_pow!(stackedvec, pregen.primeArray, pow)
-
     # IDFT
     multimodularResultArr = gpu_intt(stackedvec, pregen)
 
