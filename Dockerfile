@@ -1,8 +1,8 @@
 ARG IMAGE=nvidia/cuda:12.1.1-devel-ubuntu20.04
 FROM $IMAGE
 
-ARG JULIA_RELEASE=1.10
-ARG JULIA_VERSION=1.10.0-rc3
+ARG JULIA_RELEASE=1.9
+ARG JULIA_VERSION=1.9.0-rc3
 
 
 # julia
@@ -50,6 +50,5 @@ ENV JULIA_HISTORY=/data/logs/repl_history.jl
 
 WORKDIR "/workspace"
 COPY src /workspace/src
-COPY benchmarks /workspace/benchmarks
 
 ENTRYPOINT ["/usr/local/bin/julia"]
