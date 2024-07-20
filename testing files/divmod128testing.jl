@@ -2,11 +2,6 @@ using CUDA
 using BenchmarkTools
 using BitIntegers
 
-@inline function faster_mod(x::T, m::T)::T where T<:Integer
-    r = T(x - div(x, m) * m)
-    return r < 0 ? r + m : r
-end
-
 function div(n::Int128, m::Int128) 
     if n == 0
         return Int128(0)
@@ -72,36 +67,40 @@ function reduce_mod_m_kernel(arr::CuDeviceVector{Int128, 1}, m::Int128)
     return
 end
 
-function div_m_kernel(arr::CuDeviceVector{T, 1}, m::T) where T<:Integer
-    idx = threadIdx().x + (blockIdx().x - 1) * blockDim().x
-    a = div(arr[idx], m)
+function div_kernel(arr, m)
+    idx = threadIdx().x
+    arr[idx] = div(arr[idx], m)
 
     return
 end
 
-function test_broken_mod()
-    arr = CuArray(Int128.([10, 20, 30, 40]))
-    m = Int128(7)
-
-    # ERROR: LLVM error: Undefined external symbol "__divti3"
-    @cuda(
-        threads = length(arr),
-        blocks = 1,
-        reduce_mod_m_kernel(arr, m)
-    )
-
-    return arr
-end
-
 function test_broken_div()
+    # div works for Int128
+    arr = CuArray(Int128.([100]))
+    m = Int128(7)
+    @cuda threads = length(arr) div_kernel(arr, m) 
+    display(arr)
+
+    println("testing Int256 stuff: ")
     arr = CuArray(Int256.([10]))
     m = Int256(7)
 
-    @cuda(
-        threads = length(arr),
-        blocks = 1,
-        div_m_kernel(arr, m)
-    )
+    display(arr)
+    # Addition works
+    arr .+= m
+    println("arr after addition: ")
+    display(arr)
+    # Multiplication works
+    # arr .*= m
+    # println("arr after multiplication: ")
+    # display(arr)
+
+    
+
+    # # Division doesn't work
+    # @cuda threads = length(arr) div_kernel(arr, m)
 
     return arr
 end
+
+test_broken_div()
