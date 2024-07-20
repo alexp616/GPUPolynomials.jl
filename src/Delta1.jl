@@ -229,14 +229,33 @@ function cpu_remove_pth_power_terms!(big,small,p)
     i = 1
     k = 1
 
+    n = size(small.degrees,2)
+
+    # pre-allocation
+    smalldegs = zeros(eltype(small.degrees),n)
+    bigdegs = zeros(eltype(big.degrees),n)
+
+    function setslice_noalloc!(target,source,k)
+        for j = 1:n
+            target[j] = source[k,j]
+        end
+    end
+
+                      
     while i ≤ length(small.coeffs)
         # for a standard addition, remove the p
-        smalldegs = p .* small.degrees[i,:]
+        
+        #smalldegs = p .* small.degrees[i,:]
+        for j = 1:n
+            smalldegs[j] = p * small.degrees[i,j]
+        end
 
-        bigdegs = big.degrees[k,:]
+        #bigdegs = big.degrees[k,:]
+        setslice_noalloc!(bigdegs,big.degrees,k)
         while smalldegs != bigdegs
             k = k + 1
-            bigdegs = big.degrees[k,:]
+            #bigdegs = big.degrees[k,:]
+            setslice_noalloc!(bigdegs,big.degrees,k)
         end
         # now we know that the term in row k of big is a pth power of 
         # the term in row i of small
