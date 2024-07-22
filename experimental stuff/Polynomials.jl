@@ -1,88 +1,45 @@
 module Polynomials
 using CUDA
 
+include("ReduceByKey.jl")
+include("gpu_merge.jl")
 export HostPolynomial, SparseDevicePolynomial, SparsePolynomial, encode_degrees, decode_degrees, copy, add
 
 mutable struct HostPolynomial{T}
-    coeffs::Array{T, 1}
+    coeffs::Vector{T}
     degrees::Array{Int, 2}
     key::Int
     numVars::Int
     numTerms::Int
-end #struct
+end
 
 mutable struct SparseDevicePolynomial{T}
     coeffs::CuVector{T}
     encodedDegrees::CuVector{Int}
     key::Int
     numTerms::Int
-end #struct
-
-mutable struct SparsePolynomial{T}
-    coeffs::Vector{T}
-    encodedDegrees::Vector{T}
-    key::Int
-    numTerms::Int
 end
 
-function SparsePolynomial(sdp::SparseDevicePolynomial{T}) where T<:Real
-    return SparsePolynomial(Array(sdp.coeffs), Array(sdp.encodedDegrees), sdp.key, sdp.numTerms)
+function SparseDevicePolynomial(hp::HostPolynomial, sorted = false)
+    coeffs = CuArray(hp.coeffs)
+    degrees = CuArray(encode_degrees(hp.degrees, hp.key))
+    perm = sortperm(degrees)
+    degrees = degrees[perm]
+    coeffs = coeffs[perm]
+    return SparseDevicePolynomial(coeffs, degrees, hp.key, hp.numTerms)
 end
-
-function add(p1::SparsePolynomial, p2::SparsePolynomial)::SparsePolynomial
-    # Pre-allocate sufficiently large array to avoid out of boundsing and append!()
-    resultCoeffs = zeros(Int, p1.numTerms + p2.numTerms)
-    resultDegrees = zeros(Int, p1.numTerms + p2.numTerms)
-
-    # The algorithm
-    k = 0
-    i = 1
-    j = 1
-
-    while i <= length(p1.encodedDegrees) && j <= length(p2.encodedDegrees)
-        k += 1
-        if p1.encodedDegrees[i] < p2.encodedDegrees[j]
-            resultCoeffs[k] = p2.coeffs[j]
-            resultDegrees[k] = p2.encodedDegrees[j]
-            j += 1
-        elseif p1.encodedDegrees[i] == p2.encodedDegrees[j]
-            resultCoeffs[k] = p1.coeffs[i] + p2.coeffs[j]
-            resultDegrees[k] = p1.encodedDegrees[i]
-            if resultCoeffs[k] == 0
-                k -= 1
-            end
-            i += 1
-            j += 1
-        else
-            resultCoeffs[k] = p1.coeffs[i]
-            resultDegrees[k] = p1.encodedDegrees[i]
-            i += 1
-        end
-
-    end
-    while i <= p1.numTerms
-        k += 1
-        resultCoeffs[k] = p1.coeffs[i]
-        resultDegrees[k] = p1.encodedDegrees[i]
-        i += 1
-    end
-    while j <= p2.numTerms
-        k += 1
-        resultCoeffs[k] = p2.coeffs[j]
-        resultDegrees[k] = p2.encodedDegrees[j]
-        j += 1
-    end
-
-    return SparsePolynomial(resultCoeffs[1:k], resultDegrees[1:k], p1.key, k)
-end
-
-function SparseDevicePolynomial(hp::HostPolynomial{T}) where T<:Real
-    return SparseDevicePolynomial(CuArray(hp.coeffs), encode_degrees(hp.degrees, hp.key), hp.key, hp.numTerms)
-end #function
 
 function Base.copy(sdp::SparseDevicePolynomial{T}) where T<:Real
     return SparseDevicePolynomial(copy(sdp.coeffs), copy(sdp.encodedDegrees), sdp.key, sdp.numTerms)
 end
+
+function add(sdp1::SparseDevicePolynomial{T}, sdp2::SparseDevicePolynomial{T}) where T<:Real
+    urc, urd = merge_by_key(sdp1.encodedDegrees, sdp1.coeffs, sdp2.encodedDegrees, sdp2.coeffs)
+    rc, rd = reduce_by_key(urc, urd)
+
+    return SparseDevicePolynomial(rc, rd, sdp1.key, length(rc))
+end
+
 
 # function HostPolynomial(coeffs::Array{T, 1}, degrees::Array{U}, key = 100) where {T, U<:Integer}
 function HostPolynomial(coeffs::Array{T, 1}, degrees::Array{U}, key = 100) where {T, U<:Number}

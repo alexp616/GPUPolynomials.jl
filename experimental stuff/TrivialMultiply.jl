@@ -3,7 +3,6 @@ module TrivialMultiply
 using CUDA
 include("ReduceByKey.jl")
 include("Polynomials.jl")
-include("utils.jl")
 
 using BenchmarkTools
 using .Polynomials
@@ -14,12 +13,12 @@ export trivial_multiply, raise_sparse_to_power, raise_to_power
 # make p2 the polynomial with less terms
 function trivial_multiply(p1::SparseDevicePolynomial{T}, p2::SparseDevicePolynomial{T}, mod = -1) where {T<:Real}
     numEndingUnreducedTerms = p1.numTerms * p2.numTerms
-    unreducedResultLength = next_pow_2(numEndingUnreducedTerms) + 1
+    unreducedResultLength = nextpow(2, numEndingUnreducedTerms) + 1
 
     cu_unreducedResultCoeffs = CUDA.zeros(T, unreducedResultLength)
     cu_unreducedResultDegrees = CUDA.zeros(Int, unreducedResultLength)
 
-    kernel = @cuda launch = false trivial_multiply_kernel!(CuArray(p1.coeffs), CuArray(p1.encodedDegrees), CuArray(p2.coeffs), CuArray(p2.encodedDegrees), cu_unreducedResultCoeffs, cu_unreducedResultDegrees, p2.numTerms, numEndingUnreducedTerms)
+    kernel = @cuda launch=false trivial_multiply_kernel!(CuArray(p1.coeffs), CuArray(p1.encodedDegrees), CuArray(p2.coeffs), CuArray(p2.encodedDegrees), cu_unreducedResultCoeffs, cu_unreducedResultDegrees, p2.numTerms, numEndingUnreducedTerms)
     config = launch_configuration(kernel.fun)
     threads = min(numEndingUnreducedTerms, config.threads)
     blocks = cld(numEndingUnreducedTerms, threads)
@@ -74,7 +73,7 @@ function raise_sparse_to_power(p::SparseDevicePolynomial{T}, n::Int, mod = -1)::
     end
 
     temp = copy(p)
-    for i in 2:n
+    for _ in 2:n
         temp = trivial_multiply(temp, p)
     end
     return temp
@@ -122,7 +121,7 @@ function test_trivial_multiply()
 
     polynomial2.coeffs .%= 5
     println("Time for second step: ")
-    CUDA.@time polynomial3 = raise_to_power(polynomial2, 5)
+    CUDA.@profile polynomial3 = raise_to_power(polynomial2, 5)
 end
 
 function binb_raise_to_power(p::SparseDevicePolynomial{T}, n::Int) where T<:Real
@@ -159,8 +158,6 @@ function binb_raise_to_power(p::SparseDevicePolynomial{T}, n::Int) where T<:Real
         prods[i + 1] = trivial_multiply(gpowers[i + 1], hpowers[n + 1 - i])
     end
 
-    prods = SparsePolynomial.(prods)
-
     result = prods[1]
     for i in 2:n + 1
         result = add(result, prods[i])
@@ -171,13 +168,14 @@ end
 
 function test_binb()
     degrees = generate_compositions(4, 4)
-    coeffs = [rand(1:4) for _ in 1:size(degrees, 1)]
+    coeffs = [1 for _ in 1:size(degrees, 1)]
 
     polynomial = HostPolynomial(coeffs, degrees, 81)
     sparsePolynomial = SparseDevicePolynomial(polynomial)
 
     println("Time for first step: ")
     CUDA.@time binb_raise_to_power(sparsePolynomial, 4)
+
 end
 
 end

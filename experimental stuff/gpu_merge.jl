@@ -25,13 +25,45 @@ function cpu_merge(arr1::Vector{T}, arr2::Vector{T}) where T<:Real
     return result
 end
 
-function gpu_merge(arr1::CuVector{T}, arr2::CuVector{T}) where T<:Real
+function cpu_merge_by_key(aKeys::Vector{K}, aValues::Vector{V}, bKeys::Vector{K}, bValues::Vector{V}) where {K<:Real, V<:Real}
+    @assert length(aKeys) == length(aValues) && length(bKeys) == length(bValues) "length of key-value array pairs must match!"
+    resultLen = length(aKeys) + length(bKeys)
+    resultKeys = zeros(K, resultLen)
+    resultValues = zeros(V, resultLen)
+
+    idx1, idx2 = 1, 1
+    for i in eachindex(resultKeys)
+        if idx2 > length(bKeys)
+            resultKeys[i] = aKeys[idx1]
+            resultValues[i] = aValues[idx1]
+            idx1 += 1
+        elseif idx1 > length(aKeys)
+            resultKeys[i] = bKeys[idx2]
+            resultValues[i] = bValues[idx2]
+            idx2 += 1
+        else
+            if aKeys[idx1] < bKeys[idx2]
+                resultKeys[i] = aKeys[idx1]
+                resultValues[i] = aValues[idx1]
+                idx1 += 1
+            else
+                resultKeys[i] = bKeys[idx2]
+                resultValues[i] = bValues[idx2]
+                idx2 += 1
+            end
+        end
+    end
+
+    return resultKeys, resultValues
+end
+
+function merge(arr1::CuVector{T}, arr2::CuVector{T}) where T<:Real
     resultLen = length(arr1) + length(arr2)
     result = CUDA.zeros(T, resultLen)
     # 10 values per thread because why not
     totalThreads = div(resultLen, 10)
 
-    kernel = CUDA.@sync @cuda launch = false gpu_merge_kernel(arr1, arr2, result, resultLen, totalThreads)
+    kernel = CUDA.@sync @cuda launch = false merge_kernel(arr1, arr2, result, resultLen, totalThreads)
     config = launch_configuration(kernel.fun)
     threads = min(totalThreads, config.threads)
     blocks = cld(totalThreads, threads)
@@ -41,7 +73,7 @@ function gpu_merge(arr1::CuVector{T}, arr2::CuVector{T}) where T<:Real
     return result
 end
 
-function gpu_merge_kernel(a, b, result, resultLen, totalThreads)
+function merge_kernel(a, b, result, resultLen, totalThreads)
     tid = threadIdx().x + (blockIdx().x - 1) * blockDim().x - 1
 
     if tid <= totalThreads
@@ -114,7 +146,7 @@ function gpu_merge_kernel(a, b, result, resultLen, totalThreads)
 end
 
 """
-    gpu_merge_by_key(aKeys, aValues, bKeys, bValues)
+    merge_by_key(aKeys, aValues, bKeys, bValues)
 
 Merge 2 key-value pairs of arrays by their keys. Example:
 ak = [3, 5, 6, 8]
@@ -122,27 +154,28 @@ av = [6, 2, 3, 5]
 bk = [1, 4, 5, 7]
 bv = [5, 2, 4, 7]
 
-rk, rv = gpu_merge_by_key(ak, av, bk, bv)
+rk, rv = merge_by_key(ak, av, bk, bv)
 rk: [1, 3, 4, 5, 5, 6, 7, 8]
 rv: [5, 6, 2, 2, 4, 3, 7, 5]
 """
-function gpu_merge_by_key(aKeys::CuVector{K}, aValues::CuVector{V}, bKeys::CuVector{K}, bValues::CuVector{V}) where {K, V}<:Real
+function merge_by_key(aKeys::CuVector{K}, aValues::CuVector{V}, bKeys::CuVector{K}, bValues::CuVector{V}, comparator::Function = isless) where {K<:Real, V<:Real}
     @assert length(aKeys) == length(aValues) && length(bKeys) == length(bValues) "length of key-value array pairs must match!"
     resultLen = length(aKeys) + length(bKeys)
     resultKeys = CUDA.zeros(K, resultLen)
     resultValues = CUDA.zeros(V, resultLen)
     totalThreads = div(resultLen, 10)
 
-    kernel = @cuda launch = false gpu_merge_by_key_kernel(aKeys, aValues, bKeys, bValues, resultKeys, resultValues, resultLen, totalThreads)
+    kernel = @cuda launch = false merge_by_key_kernel(aKeys, aValues, bKeys, bValues, resultKeys, resultValues, resultLen, totalThreads, comparator)
+    config = launch_configuration(kernel.fun)
     threads = min(totalThreads, config.threads)
     blocks = cld(totalThreads, threads)
 
-    CUDA.@sync kernel(aKeys, aValues, bKeys, bValues, resultKeys, resultValues, resultLen, totalThreads; threads = threads, blocks = blocks)
+    CUDA.@sync kernel(aKeys, aValues, bKeys, bValues, resultKeys, resultValues, resultLen, totalThreads, comparator; threads = threads, blocks = blocks)
 
     return resultKeys, resultValues
 end
 
-function gpu_merge_by_key_kernel(aKeys, aValues, bKeys, bValues, resultKeys, resultValues, resultLen, totalThreads)
+function merge_by_key_kernel(aKeys, aValues, bKeys, bValues, resultKeys, resultValues, resultLen, totalThreads, comparator)
     tid = threadIdx().x + (blockIdx().x - 1) * blockDim().x - 1
 
     if tid <= totalThreads
@@ -161,8 +194,8 @@ function gpu_merge_by_key_kernel(aKeys, aValues, bKeys, bValues, resultKeys, res
                 break
             end
 
-            if aKeys[mid + 1] > bKeys[bcoord]
-                if aKeys[mid] <= bKeys[bcoord + 1]
+            if comparator(aKeys[mid + 1], bKeys[bcoord]) > 0
+                if comparator(aKeys[mid], bKeys[bcoord + 1]) <= 0
                     aptr = mid + 1
                     bptr = bcoord + 1
                     break
@@ -186,7 +219,7 @@ function gpu_merge_by_key_kernel(aKeys, aValues, bKeys, bValues, resultKeys, res
                 switch = 2
                 break
             end
-            if aKeys[aptr] < bKeys[bptr]
+            if comparator(aKeys[aptr], bKeys[bptr]) < 0
                 resultKeys[step + diag + 1] = aKeys[aptr]
                 resultValues[step + diag + 1] = aValues[aptr]
                 aptr += 1
@@ -218,8 +251,123 @@ function gpu_merge_by_key_kernel(aKeys, aValues, bKeys, bValues, resultKeys, res
     return 
 end
 
-function test_gpu_merge()
+# function merge_by_key(aKeys::CuVector{K}, aValues::CuVector{V}, bKeys::CuVector{K}, bValues::CuVector{V}) where {K<:Real, V<:Real}
+#     @assert length(aKeys) == length(aValues) && length(bKeys) == length(bValues) "length of key-value array pairs must match!"
+#     resultLen = length(aKeys) + length(bKeys)
+#     resultKeys = CUDA.zeros(K, resultLen)
+#     resultValues = CUDA.zeros(V, resultLen)
+#     totalThreads = div(resultLen, 10)
 
+#     kernel = @cuda launch = false merge_by_key_kernel(aKeys, aValues, bKeys, bValues, resultKeys, resultValues, resultLen, totalThreads)
+#     config = launch_configuration(kernel.fun)
+#     threads = min(totalThreads, config.threads)
+#     blocks = cld(totalThreads, threads)
+
+#     println("aKeys: ")
+#     display(aKeys)
+#     println("bKeys: ")
+#     display(bKeys)
+
+#     CUDA.@sync kernel(aKeys, aValues, bKeys, bValues, resultKeys, resultValues, resultLen, totalThreads; threads = threads, blocks = blocks)
+
+#     return resultKeys, resultValues
+# end
+
+# function merge_by_key_kernel(aKeys, aValues, bKeys, bValues, resultKeys, resultValues, resultLen, totalThreads)
+#     tid = threadIdx().x + (blockIdx().x - 1) * blockDim().x - 1
+
+#     if tid <= totalThreads
+#         aptr = 0
+#         bptr = 0
+#         diag = cld(tid * (resultLen), totalThreads)
+#         right = min(diag, length(aKeys))
+#         left = diag - right
+#         while true
+#             mid = (right + left) >> 1
+
+#             bcoord = diag - mid
+#             if (mid == length(aKeys) || bcoord == length(bKeys)) || (mid == 0 || bcoord == 0)
+#                 aptr = mid + 1
+#                 bptr = bcoord + 1
+#                 break
+#             end
+
+#             if aKeys[mid + 1] > bKeys[bcoord]
+#                 if aKeys[mid] <= bKeys[bcoord + 1]
+#                     aptr = mid + 1
+#                     bptr = bcoord + 1
+#                     break
+#                 else
+#                     right = mid - 1
+#                 end
+#             else
+#                 left = mid + 1
+#             end
+#         end
+
+#         step = 0
+#         steps = min(div(resultLen, totalThreads), resultLen - diag)
+#         switch = 0
+#         while step < steps
+#             if aptr > length(aKeys)
+#                 switch = 1
+#                 break
+#             end
+#             if bptr > length(bKeys)
+#                 switch = 2
+#                 break
+#             end
+#             if aKeys[aptr] < bKeys[bptr]
+#                 resultKeys[step + diag + 1] = aKeys[aptr]
+#                 resultValues[step + diag + 1] = aValues[aptr]
+#                 aptr += 1
+#             else
+#                 resultKeys[step + diag + 1] = bKeys[bptr]
+#                 resultValues[step + diag + 1] = bValues[bptr]
+#                 bptr += 1
+#             end
+#             step += 1
+#         end
+
+#         if switch == 2
+#             while step < steps && aptr <= length(aKeys)
+#                 resultKeys[step + diag + 1] = aKeys[aptr]
+#                 resultValues[step + diag + 1] = aValues[aptr]
+#                 step += 1
+#                 aptr += 1
+#             end
+#         end
+#         if switch == 1
+#             while step < steps && bptr <= length(bKeys)
+#                 resultKeys[step + diag + 1] = bKeys[bptr]
+#                 resultValues[step + diag + 1] = bValues[bptr]
+#                 step += 1
+#                 bptr += 1
+#             end
+#         end
+#     end
+#     return 
+# end
+
+function test_merge_by_key(len = 10000)
+    args = (sort!(rand(Float64, len)), rand(Float64, len), sort!(rand(Float64, len)), rand(Float64, len))
+
+    cpuresultkeys, cpuresultvalues = cpu_merge_by_key(args...)
+
+    # println(cpuresultkeys)
+    # println(cpuresultvalues)
+    # println()
+    cu_args = CuArray.(args)
+
+    gpuresultkeys, gpuresultvalues = merge_by_key(cu_args...)
+
+    # println(gpuresultkeys)
+    # println(gpuresultvalues)
+
+    @assert cpuresultkeys == Array(gpuresultkeys) && cpuresultvalues == Array(gpuresultvalues)
+end
+
+function test_merge()
     for num in [10000000, 100000000, 1000000000]
         arr1 = rand(1:num, num)
         arr2 = rand(1:num, num)
@@ -234,9 +382,8 @@ function test_gpu_merge()
         cu_arr2 = CuArray(arr2)
 
         println("Time to merge 2 * 10 ^ $(Int(round(log(10, num)))) elements on GPU: ")
-        CUDA.@time cu_arr3 = gpu_merge(cu_arr1, cu_arr2)
+        CUDA.@time cu_arr3 = merge(cu_arr1, cu_arr2)
 
         @assert arr3 == Array(cu_arr3)
     end
-    
 end

@@ -1,6 +1,5 @@
 using CUDA
 using BenchmarkTools
-include("utils.jl")
 
 function segmented_scan_upsweep_kernel(data, flags_tmp, d)
     i = threadIdx().x + (blockIdx().x - 1) * blockDim().x - 1
@@ -33,12 +32,6 @@ function segmented_scan_downsweep_kernel(data, flags_original, flags_tmp, d)
     return nothing
 end
 
-# idk any better way to do this
-function set_value(arr, idx, num)
-    arr[idx] = num
-    return
-end
-
 function generate_start_flags_kernel(keys, flags)
     tid = threadIdx().x + (blockIdx().x - 1) * blockDim().x
 
@@ -50,39 +43,41 @@ function generate_start_flags_kernel(keys, flags)
 end
 
 # function reduce_by_key(cu_keys::CuArray{T}, cu_values::CuArray{V}) where {T, V<:Integer}
-function reduce_by_key(cu_keys::CuArray{T}, cu_values::CuArray{V}) where {T, V<:Number}
+function reduce_by_key(cu_keys::CuVector{K}, cu_values::CuVector{V}) where {K, V<:Real}
     @assert length(cu_keys) == length(cu_values) "Keys and values cannot be different lengths"
-    @assert is_pow_2(length(cu_keys) - 1) "Keys and values must be length of 2^k + 1 (see ../testing files/ReduceByKey.jl for more general implementation)"
+    if !ispow2(length(cu_keys) - 1)
+        len = nextpow(2, length(cu_keys)) + 1
+        cu_keys = vcat(cu_keys, CUDA.zeros(K, len))
+        cu_values = vcat(cu_values, CUDA.zeros(V, len))
+    end
 
     # Flags must be type Int32 because we run a prefix scan on it to get result indices
     flags = CUDA.fill(Int32(0), length(cu_keys))
 
-    nthreads = min(512, length(cu_keys) - 1)
-    nblocks = cld(length(cu_keys) - 1, nthreads)
+    flagskernel = @cuda launch=false generate_start_flags_kernel(cu_keys, flags)
+    flagsconfig = launch_configuration(flagskernel.fun)
+    threads = min(length(cu_keys) - 1, prevpow(2, flagsconfig.threads))
+    blocks = cld(length(cu_keys) - 1, threads)
 
-    CUDA.@sync @cuda(
-        threads = nthreads,
-        blocks = nblocks,
-        generate_start_flags_kernel(cu_keys, flags)
-    )
+    flagskernel(cu_keys, flags; threads = threads, blocks = blocks)
 
-    CUDA.@sync @cuda set_value(flags, 1, 1)
+    CUDA.@allowscalar flags[1] = 1
     
     key_indices = accumulate(+, flags)
 
-    # hack to get the last element
-    length_of_reduced_keys = get_last_element(key_indices)
+    CUDA.@allowscalar length_of_reduced_keys = key_indices[end]
 
     cu_seg_reduced = segmented_scan(cu_values, flags)
 
-    reduced_keys = CUDA.zeros(T, length_of_reduced_keys)
+    reduced_keys = CUDA.zeros(K, length_of_reduced_keys)
     reduced_values = CUDA.zeros(V, length_of_reduced_keys)
     
-    CUDA.@sync @cuda(
-        threads = nthreads,
-        blocks = nblocks,
-        reduce_by_key_kernel(flags, key_indices, cu_keys, reduced_keys, reduced_values, cu_seg_reduced)
-    )
+    reducebykeykernel = @cuda launch=false reduce_by_key_kernel(flags, key_indices, cu_keys, reduced_keys, reduced_values, cu_seg_reduced)
+    reduceconfig = launch_configuration(reducebykeykernel.fun)
+    threads = min(length(cu_keys) - 1, prevpow(2, reduceconfig.threads))
+    blocks = cld(length(cu_keys) - 1, threads)
+
+    reducebykeykernel(flags, key_indices, cu_keys, reduced_keys, reduced_values, cu_seg_reduced; threads = threads, blocks = blocks)
 
     return reduced_keys[1:end-1], reduced_values[1:end-1]
 end
@@ -116,7 +111,7 @@ function segmented_scan(cu_data, cu_flags_original)
         )
     end
 
-    CUDA.@sync @cuda threads = 1 blocks = 1 set_value(cu_data, n, 0)
+    CUDA.@allowscalar cu_data[n] = 0
 
     for d in (log2n - 1):-1:0
         total_threads = div(length(cu_data), 2^(d + 1))
@@ -138,7 +133,7 @@ function segmented_scan(cu_data, cu_flags_original)
 end
 
 function sort_keys_with_values(keys, values)
-    perm = sortperm(keys, rev = true)
+    perm = sortperm(keys)
 
     sorted_keys = keys[perm]
     sorted_values = values[perm]
@@ -158,31 +153,6 @@ function reduce_arr(cu_keys, cu_values)
     CUDA.unsafe_free!(sorted_values)
 
     return reduced_keys, reduced_values
-end
-
-#just threw this in here to avoid adding another import
-function generate_compositions(n, k, type::DataType = Int32)
-    compositions = zeros(type, binomial(n + k - 1, k - 1), k)
-    current_composition = zeros(type, k)
-    current_composition[1] = n
-    idx = 1
-    while true
-        compositions[idx, :] .= current_composition
-        idx += 1
-        v = current_composition[k]
-        if v == n
-            break
-        end
-        current_composition[k] = 0
-        j = k - 1
-        while 0 == current_composition[j]
-            j -= 1
-        end
-        current_composition[j] -= 1
-        current_composition[j + 1] = 1 + v
-    end
-
-    return compositions
 end
 
 
