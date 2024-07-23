@@ -39,18 +39,32 @@ end
 Generates a Delta1Pregen object corresponding to numVars and prime.
 """
 function pregen_delta1(numVars::Int, prime::Int)
-    if (numVars == 4 && prime == 5)
+    if (numVars, prime) == (4, 2)
+        primeArray1 = [257]
+        primeArray2 = [12289]
+        crtType1 = Int64
+        crtType2 = Int64
+        resultType1 = Int64
+        resultType2 = Int64
+    elseif (numVars, prime) == (4, 3)
+        primeArray1 = [12289]
+        primeArray2 = [114689]
+        crtType1 = Int64
+        crtType2 = Int64
+        resultType1 = Int64
+        resultType2 = Int64
+    elseif (numVars, prime) == (4, 5)
         primeArray1 = [2654209]
         primeArray2 = [13631489, 23068673]
         crtType1 = Int64
         crtType2 = Int128
         resultType1 = Int64
         resultType2 = Int64
-    elseif (numVars == 4 && prime == 7)
+    elseif (numVars, prime) == (4, 7)
         primeArray1 = [65537, 114689, 147457]
         primeArray2 = [167772161, 377487361, 469762049]
-        crtType1 = Int64
-        crtType2 = Int128
+        crtType1 = Int128
+        crtType2 = Int256
         resultType1 = Int64
         resultType2 = Int128
     else
@@ -86,7 +100,6 @@ We can ignore the last term because the terms have homogeneous degree
 """
 function kronecker_substitution(hp::HomogeneousPolynomial, pow::Int, pregen::Delta1Pregen)::Vector{Int}
     key = hp.homogeneousDegree * pow + 1
-
     result = zeros(Int, pregen.inputLen1)
     @inbounds begin
         for termidx in eachindex(hp.coeffs)
@@ -115,7 +128,7 @@ function decode_kronecker_substitution(arr, key, numVars, totalDegree)
     # there must be a faster way to do this
     CUDA.@allowscalar resultLen = indices[end]
 
-    resultCoeffs = CUDA.zeros(Int, resultLen)
+    resultCoeffs = CUDA.zeros(eltype(arr), resultLen)
     resultDegrees = CUDA.zeros(Int, resultLen, numVars)
 
     function decode_kronecker_kernel(resultCoeffs, resultDegrees, arr, flags, indices, key, numVars, totalDegree)
@@ -130,6 +143,7 @@ function decode_kronecker_substitution(arr, key, numVars, totalDegree)
                     resultDegrees[termNum, i] = r
                     totalDegree -= r
                 end
+
                 resultCoeffs[termNum] = arr[idx]
                 resultDegrees[termNum, numVars] = totalDegree
             end
@@ -241,7 +255,6 @@ function cpu_remove_pth_power_terms!(big,small,p)
         end
     end
 
-                      
     while i ≤ length(small.coeffs)
         # for a standard addition, remove the p
         
@@ -312,16 +325,20 @@ function delta1(hp::HomogeneousPolynomial, prime, pregen::Delta1Pregen)
 
     output2 = gpu_pow(input2, prime; pregen = pregen.step2pregen)
     result = decode_kronecker_substitution(output2, pregen.key2, pregen.numVars, pregen.key2 - 1)
-    
+
     intermediate = decode_kronecker_substitution(output1, pregen.key1, pregen.numVars, pregen.key1 - 1)
+
     cpu_remove_pth_power_terms!(result,intermediate,prime)
 
-    # Here for debug purposes
+    # # Here for debug purposes
     # for i in 1:length(result.coeffs)
-    # for i in 80250:80350
+    # # for i in 80250:80350
     #     if result.coeffs[i] % prime != 0
     #         println("WRONG COEFFICIENT $i: $(result.coeffs[i]), $(result.degrees[i, :])")
     #     end
+    # end
+    # if result.coeffs[10000] % prime != 0
+    #     println("WRONG COEFFICIENT 10000: $(result.coeffs[10000]), $(result.degrees[10000, :])")
     # end
 
     result.coeffs ./= prime
@@ -332,7 +349,7 @@ function delta1(hp::HomogeneousPolynomial, prime, pregen::Delta1Pregen)
     result
 end
 
-function test_delta1(numTrials = 10)
+function test_delta1(prime = 5, numTrials = 10)
     coeffs = [1, 1, 1, 1]
     degrees = [
         4 0 0 0
@@ -344,18 +361,17 @@ function test_delta1(numTrials = 10)
     polynomial1 = HomogeneousPolynomial(coeffs, degrees)
 
     println("Time to pregenerate everything")
-    CUDA.@time pregen = pregen_delta1(4, 5)
+    CUDA.@time pregen = pregen_delta1(4, prime)
 
     println("Time to raise 4-variate polynomial to the 4th and 5th power for the first time: ")
-    CUDA.@time result = delta1(polynomial1, 5, pregen)
+    CUDA.@time result = delta1(polynomial1, prime, pregen)
 
     println("Time to raise different 4-variate polynomials to the 4th and 5th power: ")
     for i in 1:numTrials
-        polynomial2 = random_homogeneous_polynomial(4, rand(1:35), 5)
+        polynomial2 = random_homogeneous_polynomial(4, rand(1:35), prime)
         println("Trial $i")
-        CUDA.@time result2 = delta1(polynomial2, 5, pregen)
+        CUDA.@time result2 = delta1(polynomial2, prime, pregen)
     end
-    # CUDA.@profile result = delta1(polynomial1, 5, pregen)
 end
 
 end
