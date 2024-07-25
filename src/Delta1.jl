@@ -4,7 +4,7 @@ include("gpu_ntt_pow.jl")
 include("Polynomials.jl")
 using Random
 
-export HomogeneousPolynomial, random_homogeneous_polynomial, pretty_string, Delta1Pregen, pregen_delta1, delta1
+export HomogeneousPolynomial, sort_to_kronecker_order, easy_print, random_homogeneous_polynomial, pretty_string, Delta1Pregen, pregen_delta1, raise_to_p_minus_1, delta1
 
 
 """
@@ -31,6 +31,25 @@ struct Delta1Pregen
     inputLen2::Int
     key1::Int
     key2::Int
+    # forgetIndices::CuVector
+end
+
+function generate_forget_indices(numVars, prime, key)
+    arr = generate_compositions(numVars * (prime - 1), numVars)
+    arr .*= prime
+    display(arr)
+
+    result = zeros(Int, size(arr, 1))
+    for i in axes(arr, 1)
+        encoded = 1
+        for d in 1:size(arr, 2) - 1
+            encoded += arr[i, d] * key ^ (d - 1)
+        end
+
+        result[i] = encoded
+    end
+
+    return CuArray(result)
 end
 
 """
@@ -86,11 +105,13 @@ function pregen_delta1(numVars::Int, prime::Int)
 
     step2Pregen = pregen_gpu_pow(primeArray2, fftSize2, crtType2, resultType2)
 
+    # forgetIndices = generate_forget_indices(numVars, prime, key2)
+
     return Delta1Pregen(numVars, prime, step1Pregen, step2Pregen, inputLen1, inputLen2, key1, key2)
 end
 
 """
-    kronecker_substitution(hp, pow, pregen)
+    kronecker_substitution(hp::HomogeneousPolynomial, pow::Int, length::Int, key::Int)
 
 Isomorphically polynomial represented by `hp` to 1-variate polynomial.
 For example the variables x^11*y^2*z^1*w^2, with selecting a maximum degree of 16, encodes to:
@@ -98,9 +119,8 @@ x^(11 + 2 * 17 + 1 * 17^2)
 
 We can ignore the last term because the terms have homogeneous degree
 """
-function kronecker_substitution(hp::HomogeneousPolynomial, pow::Int, pregen::Delta1Pregen)::Vector{Int}
-    key = hp.homogeneousDegree * pow + 1
-    result = zeros(Int, pregen.inputLen1)
+function kronecker_substitution(hp::HomogeneousPolynomial, pow::Int, length::Int, key::Int)::Vector{Int}
+    result = zeros(Int, length)
     @inbounds begin
         for termidx in eachindex(hp.coeffs)
             # encoded = 1 because julia 1-indexing
@@ -239,7 +259,6 @@ this can fail.
 - `p`: power to remove terms from
 """
 function cpu_remove_pth_power_terms!(big,small,p)
-    
     i = 1
     k = 1
 
@@ -267,20 +286,19 @@ function cpu_remove_pth_power_terms!(big,small,p)
         setslice_noalloc!(bigdegs,big.degrees,k)
         while smalldegs != bigdegs
             k = k + 1
-            #bigdegs = big.degrees[k,:]
             setslice_noalloc!(bigdegs,big.degrees,k)
         end
         # now we know that the term in row k of big is a pth power of 
         # the term in row i of small
-
         # this is a subtraction
         big.coeffs[k] -= (small.coeffs[i])^p
-
         i = i + 1
     end
 
     nothing
 end
+
+
 
 """
     generate_compositions(n, k)
@@ -311,11 +329,108 @@ function generate_compositions(n, k, type::DataType = Int64)
     return compositions
 end
 
-function delta1(hp::HomogeneousPolynomial, prime, pregen::Delta1Pregen)
-    @assert prime == pregen.prime && size(hp.degrees, 2) == pregen.numVars "Current pregen isn't compatible with input"
 
+"""
+    raise_to_p_minus_1(hp::HomogeneousPolynomial, prime::Int, pregen::Delta1Pregen)
+
+Raises homogeneous polynomial `hp` to the `prime - 1` power and returns a vector representing
+the input into delta1, a HomogeneousPolynomial object representing hp ^ (p - 1), and a boolean
+representing if hp is F-split
+"""
+function raise_to_p_minus_1(hp::HomogeneousPolynomial, prime::Int, pregen::Delta1Pregen)
+    input1 = CuArray(kronecker_substitution(hp, prime - 1, pregen.inputLen1, pregen.key1))
+    output1 = gpu_pow(input1, prime - 1; pregen = pregen.step1pregen)
+    output1 = map(coeff -> faster_mod(coeff, prime), output1)
+
+    intermediate = decode_kronecker_substitution(output1, pregen.key1, pregen.numVars, hp.homogeneousDegree * (prime - 1))
+
+    return output1, intermediate, in_power_of_variable_ideal(prime, intermediate)
+end
+
+# don't actually know if this is right
+function in_power_of_variable_ideal(m, hp)
+    if all(hp.degrees .< m)
+        return false
+    end
+    return true
+end
+
+# """
+#     delta1(intermediate::HomogeneousPolynomial, prime::Int, pregen::Delta1Pregen, output1::CuVector = nothing)
+
+# Computes Δ_1(intermediate, prime).
+
+# Arguments:
+# `intermediate`: Homogeneous Polynomial to take delta1 of (f^(p - 1))
+# `output1`: Univariate polynomial isomorphic to intermediate
+# """
+# function delta1(intermediate::HomogeneousPolynomial, prime::Int, pregen::Delta1Pregen, output = nothing)
+#     if output === nothing
+#         input2 = CuArray(kronecker_substitution(intermediate, prime, pregen.inputLen2, intermediate.homogeneousDegree * prime + 1))
+#     else
+#         input2 = change_polynomial_encoding(output, pregen)
+#     end
+
+#     output2 = gpu_pow(input2, prime; pregen = pregen.step2pregen)
+#     result = decode_kronecker_substitution(output2, pregen.key2, pregen.numVars, pregen.key2 - 1)
+
+#     cpu_remove_pth_power_terms!(result, intermediate, prime)
+
+#     result.coeffs ./= prime
+#     result.coeffs .%= prime
+
+#     return result
+# end
+
+function delta1(intermediate::HomogeneousPolynomial, prime::Int, pregen::Delta1Pregen, output = nothing)
+    if output === nothing
+        input2 = CuArray(kronecker_substitution(intermediate, prime, pregen.inputLen2, intermediate.homogeneousDegree * prime + 1))
+    else
+        input2 = change_polynomial_encoding(output, pregen)
+    end
+
+    output2 = gpu_pow(input2, prime; pregen = pregen.step2pregen)
+    # gpu_remove_pth_power_terms!(output2, pregen.forgetIndices)
+    result = decode_kronecker_substitution(output2, pregen.key2, pregen.numVars, pregen.key2 - 1)
+
+    cpu_remove_pth_power_terms!(result,intermediate,prime)
+
+    result.coeffs ./= prime
+    result.coeffs .%= prime
+
+    return result
+end
+
+function gpu_remove_pth_power_terms!(output2, forgetIndices)
+    function gpu_remove_pth_power_terms_kernel!(output2, forgetIndices)
+        idx = threadIdx().x + (blockIdx().x - 1) * blockDim().x
+        if idx <= length(forgetIndices)
+            output2[forgetIndices[idx]] = 0
+        end
+
+        return
+    end
+
+    kernel = @cuda launch=false gpu_remove_pth_power_terms_kernel!(output2, forgetIndices)
+    config = launch_configuration(kernel.fun)
+    threads = min(length(forgetIndices), config.threads)
+    blocks = cld(length(forgetIndices), threads)
+
+    kernel(output2, forgetIndices; threads = threads, blocks = blocks)
+    return
+end
+
+function new_process(hp::HomogeneousPolynomial, prime, pregen::Delta1Pregen)
+    output1, intermediate, isfsplit = raise_to_p_minus_1(hp, prime, pregen)
+    result = delta1(intermediate, prime, pregen, output1)
+    result
+end
+
+function old_process(hp::HomogeneousPolynomial, prime, pregen::Delta1Pregen)
+    @assert prime == pregen.prime && size(hp.degrees, 2) == pregen.numVars "Current pregen isn't compatible with input"
+    
     # Raising f ^ p - 1
-    input1 = CuArray(kronecker_substitution(hp, prime - 1, pregen))
+    input1 = CuArray(kronecker_substitution(hp, prime - 1, pregen.inputLen1, hp.homogeneousDegree * (prime - 1) + 1))
     output1 = gpu_pow(input1, prime - 1; pregen = pregen.step1pregen)
 
     # Reduce mod p
@@ -350,12 +465,13 @@ function delta1(hp::HomogeneousPolynomial, prime, pregen::Delta1Pregen)
 end
 
 function test_delta1(prime = 5, numTrials = 10)
-    coeffs = [1, 1, 1, 1]
+    coeffs = [1, 2, 2, 2, 1]
     degrees = [
         4 0 0 0
         0 4 0 0
         0 0 4 0
         0 0 0 4
+        1 1 2 0
     ]
 
     polynomial1 = HomogeneousPolynomial(coeffs, degrees)
@@ -364,14 +480,19 @@ function test_delta1(prime = 5, numTrials = 10)
     CUDA.@time pregen = pregen_delta1(4, prime)
 
     println("Time to raise 4-variate polynomial to the 4th and 5th power for the first time: ")
-    CUDA.@time result = delta1(polynomial1, prime, pregen)
+    CUDA.@time old_result = old_process(polynomial1, prime, pregen)
+    new_result = new_process(polynomial1, prime, pregen)
+    @test Array(new_result.coeffs) == Array(old_result.coeffs)
+    @test Array(new_result.degrees) == Array(old_result.degrees)
 
     println("Time to raise different 4-variate polynomials to the 4th and 5th power: ")
     for i in 1:numTrials
         polynomial2 = random_homogeneous_polynomial(4, rand(1:35), prime)
         println("Trial $i")
-        CUDA.@time result2 = delta1(polynomial2, prime, pregen)
+        CUDA.@time old_result2 = old_process(polynomial2, prime, pregen)
+        new_result2 = new_process(polynomial2, prime, pregen)
+        @test Array(new_result2.coeffs) == Array(old_result2.coeffs)
+        @test Array(new_result2.degrees) == Array(old_result2.degrees)
     end
 end
-
 end

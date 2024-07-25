@@ -20,6 +20,35 @@ function HomogeneousPolynomial(coeffs::Vector{Int}, degrees::Array{Int, 2})
     return HomogeneousPolynomial(coeffs, degrees, sum(degrees[1, :]))
 end
 
+function sort_to_kronecker_order(hp::HomogeneousPolynomial, key::Int)
+    encodedDegrees = zeros(Int, size(hp.degrees, 1))
+    
+    for term in axes(hp.degrees, 1)
+        encodedDegrees[term] = kronecker(hp.degrees[term, :], key)
+    end
+    perm = sortperm(encodedDegrees)
+    encodedDegrees = encodedDegrees[perm]
+    hp.coeffs = hp.coeffs[perm]
+    hp.degrees = hp.degrees[perm, :]
+
+    return
+end
+
+function easy_print(hp::HomogeneousPolynomial)
+    for i in axes(hp.degrees, 1)
+        println("$(hp.coeffs[i]) $(hp.degrees[i, :])")
+    end
+end
+
+function kronecker(arr, key)
+    result = 1
+    for i in 1:length(arr) - 1
+        result += arr[i] * key ^ (i - 1)
+    end
+
+    return result
+end
+
 """
     DensePolynomial
 
