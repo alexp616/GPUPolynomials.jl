@@ -1,21 +1,10 @@
 include("src/Delta1.jl")
-
+include("src/gpu_ntt_pow.jl")
+include("src/Polynomials.jl")
 using .Delta1
 
 using Oscar
 using Test
-
-function test_gpu_pow()
-    R, (x, y, z, w) = polynomial_ring(GF(5), 4)
-
-    f = x^2 + y^2 + 3z^3
-    
-    f_gpu = HomogeneousPolynomial(f)
-    println(f_gpu)
-    f_back = convert_to_oscar(f_gpu, R)
-
-    println(f_back)
-end
 
 
 function convert_to_oscar(hp::HomogeneousPolynomial, ring::FqMPolyRing)
@@ -35,7 +24,21 @@ function convert_to_oscar(hp::HomogeneousPolynomial, ring::FqMPolyRing)
     return result
 end
 
+function test_gpu_pow()
+    R, (x, y, z, w) = polynomial_ring(GF(5), 4)
 
+    f = x^4 + y^4 + z^4 + w^4
+    
+    oscar_result = f^4
+
+    f_gpu = HomogeneousPolynomial(f)
+    result_gpu = gpu_pow(f_gpu, 4)
+    gpu_back = convert_to_oscar(result_gpu, R)
+
+    @test oscar_result == gpu_back
+end
+
+test_gpu_pow()
 
 # R, (x, y, z, w) = polynomial_ring(poly.parent.base_ring, 4)
 # Δ₁fpminus1 = zero(R)
