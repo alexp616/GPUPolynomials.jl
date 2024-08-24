@@ -195,3 +195,94 @@ function pretty_string(hp::HomogeneousPolynomial, variableNames::Array{String} =
     
     return resultstr[1:end-3]
 end
+
+"""
+    kronecker_substitution(hp::HomogeneousPolynomial, length::Int, key::Int)
+
+Isomorphically polynomial represented by `hp` to 1-variate polynomial.
+For example the variables x^11*y^2*z^1*w^2, with selecting a maximum degree of 16, encodes to:
+x^(11 + 2 * 17 + 1 * 17^2)
+
+We can ignore the last term because the terms have homogeneous degree
+"""
+function kronecker_substitution(hp::HomogeneousPolynomial, key::Int, length::Int = -1)::Vector{Int}
+    if length == -1
+        length = Base._nextpow2(key * (key + 1) ^ (size(hp.degrees, 2)))
+    end
+    result = zeros(Int, length)
+    @inbounds begin
+        for termidx in eachindex(hp.coeffs)
+            # encoded = 1 because julia 1-indexing
+            encoded = 1
+            for d in 1:size(hp.degrees, 2) - 1
+                encoded += hp.degrees[termidx, d] * key ^ (d - 1)
+            end
+
+            result[encoded] = hp.coeffs[termidx]
+        end
+    end
+
+    return result
+end
+
+"""
+    decode_kronecker_substitution(arr, key, numVars, totalDegree)
+
+Maps 1-variate polynomial back to `numVars`-variate polynomial
+"""
+function decode_kronecker_substitution(arr::CuVector{T}, key::Int, numVars::Int, totalDegree::Int) where T<:Integer
+    flags = map(x -> x != 0 ? 1 : 0, arr)
+    indices = accumulate(+, flags)
+
+    # there must be a faster way to do this
+    CUDA.@allowscalar resultLen = indices[end]
+
+    resultCoeffs = CUDA.zeros(eltype(arr), resultLen)
+    resultDegrees = CUDA.zeros(Int, resultLen, numVars)
+
+    function decode_kronecker_kernel(resultCoeffs, resultDegrees, arr, flags, indices, key, numVars, totalDegree)
+        idx = threadIdx().x + (blockIdx().x - 1) * blockDim().x
+
+        if idx <= length(arr)
+            if flags[idx] != 0
+                num = idx - 1
+                termNum = indices[idx]
+                for i in 1:numVars - 1
+                    num, r = divrem(num, key)
+                    resultDegrees[termNum, i] = r
+                    totalDegree -= r
+                end
+
+                resultCoeffs[termNum] = arr[idx]
+                resultDegrees[termNum, numVars] = totalDegree
+            end
+        end
+
+        return
+    end
+
+    kernel = @cuda launch = false decode_kronecker_kernel(resultCoeffs, resultDegrees, arr, flags, indices, key, numVars, totalDegree)
+    config = launch_configuration(kernel.fun)
+    threads = min(length(arr), config.threads)
+    blocks = cld(length(arr), threads)
+
+    kernel(resultCoeffs, resultDegrees, arr, flags, indices, key, numVars, totalDegree; threads = threads, blocks = blocks)
+    
+    return HomogeneousPolynomial(Array(resultCoeffs), Array(resultDegrees), totalDegree)
+end
+
+"""
+    change_encoding(num, e1, e2, numValues)
+
+Return num, if it was encoded with e2 instead of e1
+"""
+function change_encoding(num::Int, e1::Int, e2::Int, numValues::Int)
+    result = 0
+    for i in 1:numValues
+        num, r = divrem(num, e1)
+        result += r * e2 ^ (i - 1)
+    end
+
+    return result
+end
+

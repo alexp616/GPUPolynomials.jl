@@ -4,7 +4,7 @@ include("gpu_ntt_pow.jl")
 include("Polynomials.jl")
 using Random
 
-export HomogeneousPolynomial, sort_to_kronecker_order, easy_print, random_homogeneous_polynomial, pretty_string, Delta1Pregen, pregen_delta1, raise_to_p_minus_1, delta1
+export Delta1Pregen, pregen_delta1, raise_to_p_minus_1, delta1
 
 
 """
@@ -111,93 +111,6 @@ function pregen_delta1(numVars::Int, prime::Int)
 end
 
 """
-    kronecker_substitution(hp::HomogeneousPolynomial, pow::Int, length::Int, key::Int)
-
-Isomorphically polynomial represented by `hp` to 1-variate polynomial.
-For example the variables x^11*y^2*z^1*w^2, with selecting a maximum degree of 16, encodes to:
-x^(11 + 2 * 17 + 1 * 17^2)
-
-We can ignore the last term because the terms have homogeneous degree
-"""
-function kronecker_substitution(hp::HomogeneousPolynomial, pow::Int, length::Int, key::Int)::Vector{Int}
-    result = zeros(Int, length)
-    @inbounds begin
-        for termidx in eachindex(hp.coeffs)
-            # encoded = 1 because julia 1-indexing
-            encoded = 1
-            for d in 1:size(hp.degrees, 2) - 1
-                encoded += hp.degrees[termidx, d] * key ^ (d - 1)
-            end
-
-            result[encoded] = hp.coeffs[termidx]
-        end
-    end
-
-    return result
-end
-
-"""
-    decode_kronecker_substitution(arr, key, numVars, totalDegree)
-
-Maps 1-variate polynomial back to `numVars`-variate polynomial
-"""
-function decode_kronecker_substitution(arr, key, numVars, totalDegree)
-    flags = map(x -> x != 0 ? 1 : 0, arr)
-    indices = accumulate(+, flags)
-
-    # there must be a faster way to do this
-    CUDA.@allowscalar resultLen = indices[end]
-
-    resultCoeffs = CUDA.zeros(eltype(arr), resultLen)
-    resultDegrees = CUDA.zeros(Int, resultLen, numVars)
-
-    function decode_kronecker_kernel(resultCoeffs, resultDegrees, arr, flags, indices, key, numVars, totalDegree)
-        idx = threadIdx().x + (blockIdx().x - 1) * blockDim().x
-
-        if idx <= length(arr)
-            if flags[idx] != 0
-                num = idx - 1
-                termNum = indices[idx]
-                for i in 1:numVars - 1
-                    num, r = divrem(num, key)
-                    resultDegrees[termNum, i] = r
-                    totalDegree -= r
-                end
-
-                resultCoeffs[termNum] = arr[idx]
-                resultDegrees[termNum, numVars] = totalDegree
-            end
-        end
-
-        return
-    end
-
-    kernel = @cuda launch = false decode_kronecker_kernel(resultCoeffs, resultDegrees, arr, flags, indices, key, numVars, totalDegree)
-    config = launch_configuration(kernel.fun)
-    threads = min(length(arr), config.threads)
-    blocks = cld(length(arr), threads)
-
-    kernel(resultCoeffs, resultDegrees, arr, flags, indices, key, numVars, totalDegree; threads = threads, blocks = blocks)
-    
-    return HomogeneousPolynomial(Array(resultCoeffs), Array(resultDegrees), totalDegree)
-end
-
-"""
-    change_encoding(num, e1, e2, numValues)
-
-Return num, if it was encoded with e2 instead of e1
-"""
-function change_encoding(num::Int, e1::Int, e2::Int, numValues::Int)
-    result = 0
-    for i in 1:numValues
-        num, r = divrem(num, e1)
-        result += r * e2 ^ (i - 1)
-    end
-
-    return result
-end
-
-"""
     change_polynomial_encoding(p, pregen)
 
 Intermediate step of Delta1: Instead of decoding the result of the first step, then re-encoding it, we can just map each term directly to the input of the next step
@@ -220,7 +133,7 @@ end
 
 Kernel function for change_polynomial_encoding()
 """
-function change_polynomial_encoding_kernel(source, dest, key1, key2, numVars)
+function kernel(source, dest, key1, key2, numVars)
     tid = threadIdx().x + (blockIdx().x - 1) * blockDim().x
 
     @inbounds begin
@@ -338,7 +251,7 @@ the input into delta1, a HomogeneousPolynomial object representing hp ^ (p - 1),
 representing if hp is F-split
 """
 function raise_to_p_minus_1(hp::HomogeneousPolynomial, prime::Int, pregen::Delta1Pregen)
-    input1 = CuArray(kronecker_substitution(hp, prime - 1, pregen.inputLen1, pregen.key1))
+    input1 = CuArray(kronecker_substitution(hp, pregen.key1, pregen.inputLen1))
     output1 = gpu_pow(input1, prime - 1; pregen = pregen.step1pregen)
     output1 = map(coeff -> faster_mod(coeff, prime), output1)
 
@@ -366,7 +279,7 @@ end
 # """
 # function delta1(intermediate::HomogeneousPolynomial, prime::Int, pregen::Delta1Pregen, output = nothing)
 #     if output === nothing
-#         input2 = CuArray(kronecker_substitution(intermediate, prime, pregen.inputLen2, intermediate.homogeneousDegree * prime + 1))
+#         input2 = CuArray(kronecker_substitution(intermediate, intermediate.homogeneousDegree * prime + 1, pregen.inputLen2))
 #     else
 #         input2 = change_polynomial_encoding(output, pregen)
 #     end
@@ -384,7 +297,7 @@ end
 
 function delta1(intermediate::HomogeneousPolynomial, prime::Int, pregen::Delta1Pregen, output = nothing)
     if output === nothing
-        input2 = CuArray(kronecker_substitution(intermediate, prime, pregen.inputLen2, intermediate.homogeneousDegree * prime + 1))
+        input2 = CuArray(kronecker_substitution(intermediate, intermediate.homogeneousDegree * prime + 1, pregen.inputLen2))
     else
         input2 = change_polynomial_encoding(output, pregen)
     end
@@ -430,7 +343,7 @@ function old_process(hp::HomogeneousPolynomial, prime, pregen::Delta1Pregen)
     @assert prime == pregen.prime && size(hp.degrees, 2) == pregen.numVars "Current pregen isn't compatible with input"
     
     # Raising f ^ p - 1
-    input1 = CuArray(kronecker_substitution(hp, prime - 1, pregen.inputLen1, hp.homogeneousDegree * (prime - 1) + 1))
+    input1 = CuArray(kronecker_substitution(hp, hp.homogeneousDegree * (prime - 1) + 1, pregen.inputLen1))
     output1 = gpu_pow(input1, prime - 1; pregen = pregen.step1pregen)
 
     # Reduce mod p

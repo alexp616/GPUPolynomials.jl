@@ -1,4 +1,5 @@
 include("ntt_utils.jl")
+include("Polynomials.jl")
 
 """
     GPUPowPregen
@@ -47,8 +48,13 @@ end
 
 Raises polynomial represented by `vec` to the `pow` power. Current implementation requires a pregenerated object to work
 """
-function gpu_pow(vec::CuVector{Int}, pow::Int; pregen::GPUPowPregen)
+function gpu_pow(vec::CuVector{Int}, pow::Int; pregen::Union{GPUPowPregen, Nothing} = nothing)
     finalLength = (length(vec) - 1) * pow + 1
+
+    if pregen === nothing
+        println("Using default pregeneration! (not recommended)")
+        pregen = pregen_gpu_pow([13631489, 23068673], Base._nextpow2(finalLength), Int128, Int)
+    end
 
     # Padding, stacking for multiple prime modulus, and butterflying indices
     stackedvec = repeat(((vcat(vec, zeros(Int, pregen.len - length(vec))))[pregen.pregenButterfly])', length(pregen.primeArray), 1)
@@ -73,6 +79,26 @@ function gpu_pow(vec::CuVector{Int}, pow::Int; pregen::GPUPowPregen)
 
     # CRT
     result = build_result(multimodularResultArr, pregen.crtPregen, pregen.resultType)[1:finalLength]
+
+    return result
+end
+
+"""
+    gpu_pow(hp, pow; pregen)
+
+Overload of gpu_pow method that takes in HomogeneousPolynomial object and returns HomogeneousPolynomial object.
+"""
+function gpu_pow(hp::HomogeneousPolynomial{T}, pow::Int; pregen::Union{GPUPowPregen, Nothing} = nothing) where T<:Integer
+    key = hp.homogeneousDegree * pow + 1
+    inputLen = hp.homogeneousDegree * (key) ^ (size(hp.degrees, 2) - 2) + 1
+    if pregen === nothing
+        println("Using default pregeneration! (not recommended)")
+        pregen = pregen_gpu_pow([13631489, 23068673], Base._nextpow2((inputLen - 1) * pow + 1), Int128, Int)
+    end
+
+    denseHP = CuArray(kronecker_substitution(hp, key, inputLen))
+    denseResult = gpu_pow(denseHP, pow; pregen = pregen)
+    result = decode_kronecker_substitution(denseResult, key, size(hp.degrees, 2), key - 1)
 
     return result
 end
