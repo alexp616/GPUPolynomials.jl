@@ -12,7 +12,8 @@ import Base.div
 """
     faster_mod(x::Int, m::Int)::Int
 
-Not actually faster, but ensures result is positive.
+Not actually faster, but ensures result is positive. Also more convenient for
+custom division methods
 """
 @inline function faster_mod(x::T, m::Integer)::T where T<:Integer
     m = T(m)
@@ -23,9 +24,10 @@ end
 """
     div(n::Int128, m::Int128)::Int128
 
-div function for Int128's that can be called inside CUDA kernels, since Base.div can't
+div function for Int128's that can be called inside CUDA kernels, since Base.div can't.
+Works by long division
 """
-function div(n::Int128, m::Int128)::Int128
+function Base.div(n::Int128, m::Int128)::Int128
     if n == 0
         return Int128(0)
     end

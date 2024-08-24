@@ -1,3 +1,5 @@
+using Oscar
+
 """
     HomogeneousPolynomial
 
@@ -18,6 +20,28 @@ end
 function HomogeneousPolynomial(coeffs::Vector{Int}, degrees::Array{Int, 2})
     @assert length(coeffs) == size(degrees, 1)
     return HomogeneousPolynomial(coeffs, degrees, sum(degrees[1, :]))
+end
+
+"""
+    HomogeneousPolynomial(p::FqMPolyRingElem)
+
+Convert Oscar polynomial to HomogeneousPolynomial datastructure
+"""
+function HomogeneousPolynomial(p::FqMPolyRingElem, type::DataType = Int)
+    coeffs = coefficients(p)
+  
+    # julia by default doesn't realize that "ZZ" is not
+    # an array, so insert it as a one-element tuple "(ZZ,)"
+    # so that julia will know not to broadcast along it.
+    coeffs_as_int64arr = type.(lift.((ZZ,),coeffs))
+
+    exp_vecs = leading_exponent_vector.(terms(p))
+
+    # shamelessly taken from 
+    # https://discourse.julialang.org/t/how-to-convert-vector-of-vectors-to-matrix/72609/2 
+    exponent_mat = reduce(vcat,transpose.(exp_vecs))
+  
+    return HomogeneousPolynomial(coeffs_as_int64arr,exponent_mat)
 end
 
 function sort_to_kronecker_order(hp::HomogeneousPolynomial, key::Int)
@@ -53,7 +77,7 @@ end
     DensePolynomial
 
 Struct that represents a univariate, dense polynomial. For example,
-DensePolynomial([a, b, c, d]) = a + bx + cx^2 + dx^3
+DensePolynomial([a, b, c, d]) = a + bx + cx^2 + d^3
 """
 mutable struct DensePolynomial{T<:Integer}
     coeffs::Vector{T}
@@ -67,7 +91,10 @@ end
 """
     SparsePolynomial
 
-Struct that represents a univariate, sparse polynomial.
+Struct that represents a univariate, sparse polynomial. For example,
+SparsePolynomial([a, b, c, d], [1, 2, 5, 7]) = ax^7 + bx^5 + cx^2 + dx.
+
+Figure out sorting stuff later
 """
 mutable struct SparsePolynomial{T<:Integer}
     coeffs::Vector{Int}
@@ -75,10 +102,23 @@ mutable struct SparsePolynomial{T<:Integer}
     numTerms::Int
 end
 
-function SparsePolynomial(coeffs::Vector{Int}, degrees::Vector{Int})
-    @assert length(coeffs) == length(degrees)
+function SparsePolynomial(coeffs::Vector{T}, degrees::Vector{Int}) where T<:Integer
+    if length(coeffs) != length(degrees)
+        throw("coeffs and degrees must be the same length! length(coeffs): $(length(coeffs)), length(degrees): $(length(degrees))")
+    end
     new(coeffs, degrees, length(coeffs))
 end
+
+"""
+    DensePolynomial(sp::SparsePolynomial, key::Int)
+
+Constructs a DensePolynomial object from a sparse polynomial
+"""
+# function DensePolynomial(sp::SparsePolynomial{T}) where T<:Integer
+#     polynomialDegree = sp.degrees[1]
+#     result = zeros(T, polynomialDegree + 1)
+#     for ()
+# end
 
 """
     random_homogeneous_polynomial(numVars, numTerms, modulus)
