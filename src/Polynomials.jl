@@ -1,3 +1,8 @@
+module Polynomials
+
+export HomogeneousPolynomial, sort_to_kronecker_order, easy_print, kronecker, DensePolynomial, SparsePolynomial, random_homogeneous_polynomial, pretty_string, kronecker_substitution, decode_kronecker_substitution, change_encoding, convert_to_oscar
+
+using CUDA
 using Oscar
 
 """
@@ -197,7 +202,7 @@ function pretty_string(hp::HomogeneousPolynomial, variableNames::Array{String} =
 end
 
 """
-    kronecker_substitution(hp::HomogeneousPolynomial, length::Int, key::Int)
+    kronecker_substitution(hp::HomogeneousPolynomial, key::Int, length::Int)
 
 Isomorphically polynomial represented by `hp` to 1-variate polynomial.
 For example the variables x^11*y^2*z^1*w^2, with selecting a maximum degree of 16, encodes to:
@@ -286,3 +291,21 @@ function change_encoding(num::Int, e1::Int, e2::Int, numValues::Int)
     return result
 end
 
+function convert_to_oscar(hp::HomogeneousPolynomial, ring::FqMPolyRing)
+    vars = gens(ring)
+    numVars = size(hp.degrees, 2)
+
+    @assert length(vars) == numVars "Number of variables of hp and ring not compatible"
+
+    result = zero(ring)
+
+    for (i, coeff) in enumerate(hp.coeffs)
+        expRow = hp.degrees[i, :]
+        term = coeff * prod(vars[j] ^ expRow[j] for j in 1:numVars)
+        result += term
+    end
+
+    return result
+end
+
+end

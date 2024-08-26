@@ -1,5 +1,11 @@
+module GPUPow
+
+export GPUPowPregen, pregen_gpu_pow, gpu_pow
+
 include("ntt_utils.jl")
-include("Polynomials.jl")
+
+using ..Polynomials
+using CUDA
 
 """
     GPUPowPregen
@@ -43,6 +49,8 @@ function pregen_gpu_pow(primeArray::Vector{Int}, len::Int, crtType::DataType, re
     return GPUPowPregen(primeArray, npruArray, npruInverseArray, len, log2len, lenInverseArray, pregenButterfly, crtPregen, resultType)
 end
 
+
+
 """
     gpu_pow(vec, pow; pregen)
 
@@ -83,6 +91,13 @@ function gpu_pow(vec::CuVector{Int}, pow::Int; pregen::Union{GPUPowPregen, Nothi
     return result
 end
 
+function pregen_gpu_pow(hp::HomogeneousPolynomial, pow::Int, primeArray = [13631489, 23068673])
+    key = hp.homogeneousDegree * pow + 1
+    inputLen = hp.homogeneousDegree * (key) ^ (size(hp.degrees, 2) - 2) + 1
+
+    return pregen_gpu_pow(primeArray, Base._nextpow2((inputLen - 1) * pow + 1), Int128, Int) 
+end
+
 """
     gpu_pow(hp, pow; pregen)
 
@@ -92,11 +107,15 @@ function gpu_pow(hp::HomogeneousPolynomial{T}, pow::Int; pregen::Union{GPUPowPre
     key = hp.homogeneousDegree * pow + 1
     inputLen = hp.homogeneousDegree * (key) ^ (size(hp.degrees, 2) - 2) + 1
     if pregen === nothing
-        println("Using default pregeneration! (not recommended)")
-        pregen = pregen_gpu_pow([13631489, 23068673], Base._nextpow2((inputLen - 1) * pow + 1), Int128, Int)
+        println("Using default pregeneration... (not recommended)")
+        
+        pregenTime = CUDA.@timed begin 
+            pregen = pregen_gpu_pow([13631489, 23068673], Base._nextpow2((inputLen - 1) * pow + 1), Int128, Int)
+        end
+        println("Pregeneration took $(pregenTime.time) s")
     end
 
-    denseHP = CuArray(kronecker_substitution(hp, key, inputLen))
+    denseHP = CuArray(Polynomials.kronecker_substitution(hp, key, inputLen))
     denseResult = gpu_pow(denseHP, pow; pregen = pregen)
     result = decode_kronecker_substitution(denseResult, key, size(hp.degrees, 2), key - 1)
 
@@ -239,4 +258,6 @@ function build_result_kernel(result::CuDeviceVector, multimodularResultArr::CuDe
     end
 
     return 
+end
+
 end

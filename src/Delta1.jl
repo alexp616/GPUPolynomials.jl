@@ -1,11 +1,11 @@
 module Delta1
 
-include("gpu_ntt_pow.jl")
-include("Polynomials.jl")
-using Random
-
 export Delta1Pregen, pregen_delta1, raise_to_p_minus_1, delta1
 
+using CUDA
+using ..Polynomials
+using ..GPUPow
+using Random
 
 """
     Delta1Pregen
@@ -27,6 +27,8 @@ struct Delta1Pregen
     prime::Int
     step1pregen::GPUPowPregen
     step2pregen::GPUPowPregen
+    step1TotalDegree::Int
+    step2TotalDegree::Int
     inputLen1::Int
     inputLen2::Int
     key1::Int
@@ -50,6 +52,38 @@ function generate_forget_indices(numVars, prime, key)
     end
 
     return CuArray(result)
+end
+
+function pregen_delta1_4_7()
+    primeArray1 = [2654209]
+    primeArray2 = [69206017, 23068673]
+    crtType1 = Int64
+    crtType2 = Int128
+    resultType1 = Int64
+    resultType2 = Int64
+
+    # Restricted monomials have max degree 3, so raising to 7 - 1 = 7 results in max degree 18
+    step1ResultDegree = 18
+    step1TotalDegree = 24
+    key1 = 19
+
+    # The term that will encode to the highest value is x1^3*x2. This encodes to 3 * 19 ^ 2 + 1 * 19, which we then add 1 to because dense vector length = max degree + 1
+    inputLen1 = 3 * 19 ^ 2 + 1 * 19 + 1
+    fftSize1 = Base._nextpow2((inputLen1 - 1) * 6 + 1)
+
+    step1Pregen = pregen_gpu_pow(primeArray1, fftSize1, crtType1, resultType1)
+
+    step2ResultDegree = step1ResultDegree * 7
+    step2TotalDegree = 168
+    key2 = 127;
+
+    # x1^3*x2 is now x1^18*x2^6
+    inputLen2 = 18 * 127 ^ 2 + 6 * 127 + 1
+    fftSize2 = Base._nextpow2((inputLen2 - 1) * 7 + 1)
+
+    step2Pregen = pregen_gpu_pow(primeArray2, fftSize2, crtType2, resultType2)
+
+    return Delta1Pregen(4, 7, step1Pregen, step2Pregen, step1TotalDegree, step2TotalDegree, inputLen1, inputLen2, key1, key2)
 end
 
 """
@@ -80,17 +114,13 @@ function pregen_delta1(numVars::Int, prime::Int)
         resultType1 = Int64
         resultType2 = Int64
     elseif (numVars, prime) == (4, 7)
-        primeArray1 = [65537, 114689, 147457]
-        primeArray2 = [167772161, 377487361, 469762049]
-        crtType1 = Int128
-        crtType2 = Int256
-        resultType1 = Int64
-        resultType2 = Int128
+        return pregen_delta1_4_7()
     else
         throw("I havent figured out these bounds yet")
     end
 
     step1ResultDegree = numVars * (prime - 1)
+    step1TotalDegree = step1ResultDegree
     key1 = step1ResultDegree + 1
 
     inputLen1 = numVars * (step1ResultDegree + 1) ^ (numVars - 2) + 1
@@ -99,6 +129,7 @@ function pregen_delta1(numVars::Int, prime::Int)
     step1Pregen = pregen_gpu_pow(primeArray1, fftSize1, crtType1, resultType1)
 
     step2ResultDegree = step1ResultDegree * prime
+    step2TotalDegree = step2ResultDegree
     key2 = step2ResultDegree + 1
     inputLen2 = step1ResultDegree * (step2ResultDegree + 1) ^ (numVars - 2) + 1
     fftSize2 = nextpow(2, (inputLen2 - 1) * prime + 1)
@@ -255,7 +286,7 @@ function raise_to_p_minus_1(hp::HomogeneousPolynomial, prime::Int, pregen::Delta
     output1 = gpu_pow(input1, prime - 1; pregen = pregen.step1pregen)
     output1 = map(coeff -> faster_mod(coeff, prime), output1)
 
-    intermediate = decode_kronecker_substitution(output1, pregen.key1, pregen.numVars, hp.homogeneousDegree * (prime - 1))
+    intermediate = decode_kronecker_substitution(output1, pregen.key1, pregen.numVars, pregen.step1TotalDegree)
 
     return output1, intermediate, in_power_of_variable_ideal(prime, intermediate)
 end
@@ -268,46 +299,24 @@ function in_power_of_variable_ideal(m, hp)
     return true
 end
 
-# """
-#     delta1(intermediate::HomogeneousPolynomial, prime::Int, pregen::Delta1Pregen, output1::CuVector = nothing)
-
-# Computes Δ_1(intermediate, prime).
-
-# Arguments:
-# `intermediate`: Homogeneous Polynomial to take delta1 of (f^(p - 1))
-# `output1`: Univariate polynomial isomorphic to intermediate
-# """
-# function delta1(intermediate::HomogeneousPolynomial, prime::Int, pregen::Delta1Pregen, output = nothing)
-#     if output === nothing
-#         input2 = CuArray(kronecker_substitution(intermediate, intermediate.homogeneousDegree * prime + 1, pregen.inputLen2))
-#     else
-#         input2 = change_polynomial_encoding(output, pregen)
-#     end
-
-#     output2 = gpu_pow(input2, prime; pregen = pregen.step2pregen)
-#     result = decode_kronecker_substitution(output2, pregen.key2, pregen.numVars, pregen.key2 - 1)
-
-#     cpu_remove_pth_power_terms!(result, intermediate, prime)
-
-#     result.coeffs ./= prime
-#     result.coeffs .%= prime
-
-#     return result
-# end
-
 function delta1(intermediate::HomogeneousPolynomial, prime::Int, pregen::Delta1Pregen, output = nothing)
     if output === nothing
-        input2 = CuArray(kronecker_substitution(intermediate, intermediate.homogeneousDegree * prime + 1, pregen.inputLen2))
+        input2 = CuArray(kronecker_substitution(intermediate, pregen.key2, pregen.inputLen2))
     else
         input2 = change_polynomial_encoding(output, pregen)
     end
 
     output2 = gpu_pow(input2, prime; pregen = pregen.step2pregen)
     # gpu_remove_pth_power_terms!(output2, pregen.forgetIndices)
-    result = decode_kronecker_substitution(output2, pregen.key2, pregen.numVars, pregen.key2 - 1)
+    result = decode_kronecker_substitution(output2, pregen.key2, pregen.numVars, pregen.step2TotalDegree)
 
     cpu_remove_pth_power_terms!(result,intermediate,prime)
 
+    # for i in eachindex(result.coeffs)
+    #     if (result.coeffs[i] % prime != 0 && i % 70000 == 0)
+    #         println("WC: $i, degrees: $(result.degrees[i])")
+    #     end
+    # end
     result.coeffs ./= prime
     result.coeffs .%= prime
 
@@ -343,7 +352,7 @@ function old_process(hp::HomogeneousPolynomial, prime, pregen::Delta1Pregen)
     @assert prime == pregen.prime && size(hp.degrees, 2) == pregen.numVars "Current pregen isn't compatible with input"
     
     # Raising f ^ p - 1
-    input1 = CuArray(kronecker_substitution(hp, hp.homogeneousDegree * (prime - 1) + 1, pregen.inputLen1))
+    input1 = CuArray(kronecker_substitution(hp, pregen.key1, pregen.inputLen1))
     output1 = gpu_pow(input1, prime - 1; pregen = pregen.step1pregen)
 
     # Reduce mod p
@@ -377,35 +386,4 @@ function old_process(hp::HomogeneousPolynomial, prime, pregen::Delta1Pregen)
     result
 end
 
-function test_delta1(prime = 5, numTrials = 10)
-    coeffs = [1, 2, 2, 2, 1]
-    degrees = [
-        4 0 0 0
-        0 4 0 0
-        0 0 4 0
-        0 0 0 4
-        1 1 2 0
-    ]
-
-    polynomial1 = HomogeneousPolynomial(coeffs, degrees)
-
-    println("Time to pregenerate everything")
-    CUDA.@time pregen = pregen_delta1(4, prime)
-
-    println("Time to raise 4-variate polynomial to the 4th and 5th power for the first time: ")
-    CUDA.@time old_result = old_process(polynomial1, prime, pregen)
-    new_result = new_process(polynomial1, prime, pregen)
-    @test Array(new_result.coeffs) == Array(old_result.coeffs)
-    @test Array(new_result.degrees) == Array(old_result.degrees)
-
-    println("Time to raise different 4-variate polynomials to the 4th and 5th power: ")
-    for i in 1:numTrials
-        polynomial2 = random_homogeneous_polynomial(4, rand(1:35), prime)
-        println("Trial $i")
-        CUDA.@time old_result2 = old_process(polynomial2, prime, pregen)
-        new_result2 = new_process(polynomial2, prime, pregen)
-        @test Array(new_result2.coeffs) == Array(old_result2.coeffs)
-        @test Array(new_result2.degrees) == Array(old_result2.degrees)
-    end
-end
 end
