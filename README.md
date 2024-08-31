@@ -48,3 +48,6 @@ Here is a list of features that I will be able to implement in the forseeable fu
 - Polynomial evaluation
 
 The grand idea for this library is for it to be able to seamlessly integrate with Oscar, and to use the GPU whenever the cases are big enough for the GPU to be faster than Oscar.
+
+## Other features
+In implementing the algorithms necessary for polynomial arithmetic, [reduce_by_key()](https://nvidia.github.io/cccl/thrust/api/function_group__reductions_1gab2a639dcea2b476c2f8f3cdd5a975e19.html), [merge()](https://nvidia.github.io/cccl/thrust/api/function_group__merging_1gaae0c908dc70a47bfd2bfbda46fcc1d12.html), and [merge_by_key()](https://nvidia.github.io/cccl/thrust/api/function_group__merging_1ga71ba8aab955a1f1475bbb4a658294df4.html) are also implemented in `experimental stuff/`. I don't claim that all of these are optimal, but they don't exist in CUDA.jl, and are magnitudes faster than their non-parallel counterparts on the CPU.
