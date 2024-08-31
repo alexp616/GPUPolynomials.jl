@@ -144,10 +144,11 @@ function gpu_pow_cpu_crt(hp::HomogeneousPolynomial{T}, pow::Int, key = 0; pregen
     broadcast_pow!(stackedvec, pregen.primeArray, pow)
 
     gpumultimod = gpu_intt(stackedvec, pregen)
-
+    CUDA.unsafe_free!(stackedvec)
     multimodResult, resultDegrees = sparsify(gpumultimod, size(hp.degrees, 2), key, hp.homogeneousDegree * pow)
+    CUDA.unsafe_free!(gpumultimod)
     multimodResult = BigInt.(multimodResult)
-    result = zeros(pregen.resultType, size(multimodResult, 2))
+    resultCoeffs = zeros(pregen.resultType, size(multimodResult, 2))
 
     crtpregen = BigInt.(Array(pregen.crtPregen))
 
@@ -156,10 +157,10 @@ function gpu_pow_cpu_crt(hp::HomogeneousPolynomial{T}, pow::Int, key = 0; pregen
         for i in axes(crtpregen, 2)
             x = mod(x * crtpregen[2, i] + multimodResult[i + 1, col] * crtpregen[1, i], crtpregen[3, i])
         end
-        result[col] = pregen.resultType(x)
+        resultCoeffs[col] = pregen.resultType(x)
     end
 
-    return HomogeneousPolynomial(result, resultDegrees)
+    return HomogeneousPolynomial(resultCoeffs, resultDegrees)
 end
 
 # function generate_flags_kernel!(flags::CuVector{Int32}, multimodarr::CuMatrix{T}) where T<:Integer

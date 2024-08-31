@@ -1,6 +1,6 @@
 module RandomPolynomialGenerator
 
-include("../src/Delta1.jl")
+include("../src/GPUPolynomials.jl")
 using .Delta1
 
 function generate_random_polynomials(numVars, modulus, numPolynomials, outputFile = "benchmarks/randompolynomials.txt")

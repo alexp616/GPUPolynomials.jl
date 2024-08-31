@@ -6,7 +6,7 @@ using DataFrames
 using CSV
 
 # include("../experimental stuff/TrivialMultiply.jl")
-include("../src/Delta1.jl")
+include("../src/GPUPolynomials.jl")
 include("random_polynomial_generator.jl")
 using .Delta1
 using .RandomPolynomialGenerator
