@@ -70,15 +70,16 @@ end
 
 function pregen_crt(primeArray::Vector{Int}, crtType::DataType)
     result = zeros(crtType, 3, length(primeArray) - 1)
-    currmod = primeArray[1]
+    temp = crtType.(primeArray)
+    currmod = temp[1]
     # Iterate through, compute m1 and m2 for each modulus
     # store n1 * m1 and n2 * m2, since CRT is a1 * n1 * m1 + a1 * n2 * m2
-    for i in 2:length(primeArray)
-        m1, m2 = extended_gcd_iterative(currmod, primeArray[i])
+    for i in 2:length(temp)
+        m1, m2 = extended_gcd_iterative(currmod, temp[i])
         # no point in reducing these mod n1n2 because m1 is bounded by n2, so n1m1 is bounded above by n1n2
         result[1, i - 1] = m1 * currmod
-        result[2, i - 1] = m2 * primeArray[i]
-        currmod *= primeArray[i]
+        result[2, i - 1] = m2 * temp[i]
+        currmod *= temp[i]
         result[3, i - 1] = currmod
     end
 
@@ -169,6 +170,19 @@ function inverse_generator(npruarray::Array, primearray::Array)
     return mod_inverse.(npruarray, primearray)
 end
 
+function decode(idx, numVars = 4, totalDegree = 168, key = 127)
+    result = zeros(Int, numVars)
+    num = idx - 1
+    for i in 1:numVars - 1
+        num, r = divrem(num, key)
+        result[i] = r
+        totalDegree -= r
+    end
+
+    result[numVars] = totalDegree
+
+    return result
+end
 
 """
     power_mod(n, p, m)

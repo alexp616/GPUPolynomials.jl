@@ -1,6 +1,6 @@
 module GPUPow
 
-export GPUPowPregen, pregen_gpu_pow, gpu_pow
+export GPUPowPregen, pregen_gpu_pow, gpu_pow, gpu_pow_cpu_crt
 
 include("ntt_utils.jl")
 
@@ -48,8 +48,6 @@ function pregen_gpu_pow(primeArray::Vector{Int}, len::Int, crtType::DataType, re
 
     return GPUPowPregen(primeArray, npruArray, npruInverseArray, len, log2len, lenInverseArray, pregenButterfly, crtPregen, resultType)
 end
-
-
 
 """
     gpu_pow(vec, pow; pregen)
@@ -120,6 +118,122 @@ function gpu_pow(hp::HomogeneousPolynomial{T}, pow::Int; pregen::Union{GPUPowPre
     result = decode_kronecker_substitution(denseResult, key, size(hp.degrees, 2), key - 1)
 
     return result
+end
+
+function gpu_pow_cpu_crt(hp::HomogeneousPolynomial{T}, pow::Int, key = 0; pregen::Union{GPUPowPregen, Nothing} = nothing) where T<:Integer
+    if key == 0
+        key = hp.homogeneousDegree * pow + 1    
+    end
+
+    inputLen = hp.homogeneousDegree * (key) ^ (size(hp.degrees, 2) - 2) + 1
+    if pregen === nothing
+        println("Using default pregeneration... (not recommended)")
+        
+        pregenTime = CUDA.@timed begin 
+            pregen = pregen_gpu_pow([13631489, 23068673], Base._nextpow2((inputLen - 1) * pow + 1), Int128, Int)
+        end
+        println("Pregeneration took $(pregenTime.time) s")
+    end
+
+    vec = CuArray(kronecker_substitution(hp, key, inputLen))
+
+    stackedvec = repeat(((vcat(vec, zeros(T, pregen.len - length(vec))))[pregen.pregenButterfly])', length(pregen.primeArray), 1)
+
+    gpu_ntt!(stackedvec, pregen.primeArray, pregen.npruArray, pregen.len, pregen.log2len)
+
+    broadcast_pow!(stackedvec, pregen.primeArray, pow)
+
+    gpumultimod = gpu_intt(stackedvec, pregen)
+
+    multimodResult, resultDegrees = sparsify(gpumultimod, size(hp.degrees, 2), key, hp.homogeneousDegree * pow)
+    multimodResult = BigInt.(multimodResult)
+    result = zeros(pregen.resultType, size(multimodResult, 2))
+
+    crtpregen = BigInt.(Array(pregen.crtPregen))
+
+    for col in axes(multimodResult, 2)
+        x = multimodResult[1, col]
+        for i in axes(crtpregen, 2)
+            x = mod(x * crtpregen[2, i] + multimodResult[i + 1, col] * crtpregen[1, i], crtpregen[3, i])
+        end
+        result[col] = pregen.resultType(x)
+    end
+
+    return HomogeneousPolynomial(result, resultDegrees)
+end
+
+# function generate_flags_kernel!(flags::CuVector{Int32}, multimodarr::CuMatrix{T}) where T<:Integer
+function generate_flags_kernel!(flags, multimodarr)
+    idx = threadIdx().x + (blockIdx().x - 1) * blockDim().x
+
+    if idx <= length(flags)
+        # if idx == 2
+        #     for i in axes(multimodarr, 1)
+        #         @cuprintln(multimodarr[])
+        #     end
+            
+        # end
+        for i in axes(multimodarr, 1)
+            if multimodarr[i, idx] != 0
+                flags[idx] = 1
+                return
+            end
+        end
+    end
+
+    return
+end
+
+function generate_result_kernel!(multimodarr, flags, indices, resultmultimodarr, resultDegrees, numVars, key, totalDegree)
+    idx = threadIdx().x + (blockIdx().x - 1) * blockDim().x
+    
+    if idx <= length(flags)
+        if flags[idx] != 0
+            num = idx - 1
+            a = num
+            termNum = indices[idx]
+            for i in 1:numVars - 1
+                num, r = divrem(num, key)
+                resultDegrees[termNum, i] = r
+                totalDegree -= r
+            end
+            
+            resultDegrees[termNum, numVars] = totalDegree
+            for i in axes(multimodarr, 1)
+                resultmultimodarr[i, termNum] = multimodarr[i, idx]
+            end
+        end
+    end
+
+    return
+end
+
+function sparsify(multimodarr::CuMatrix{T}, numVars, key, totalDegree) where T<:Integer
+    flags = CUDA.zeros(Int32, size(multimodarr, 2))
+
+    # Initialize one thread for each column
+    kernel = @cuda launch = false generate_flags_kernel!(flags, multimodarr)
+    config = launch_configuration(kernel.fun)
+    threads = min(length(flags), config.threads)
+    blocks = cld(length(flags), threads)
+
+    kernel(flags, multimodarr; threads = threads, blocks = blocks)
+
+    indices = accumulate(+, flags)
+
+    CUDA.@allowscalar resultLen = indices[end]
+
+    resultmultimodarr = CUDA.zeros(T, size(multimodarr, 1), resultLen)
+    resultDegrees = CUDA.zeros(Int, resultLen, numVars)
+
+    kernel2 = @cuda launch = false generate_result_kernel!(multimodarr, flags, indices, resultmultimodarr, resultDegrees, numVars, key, totalDegree)
+    config = launch_configuration(kernel.fun)
+    threads = min(length(flags), config.threads)
+    blocks = cld(length(flags), threads)
+
+    kernel2(multimodarr, flags, indices, resultmultimodarr, resultDegrees, numVars, key, totalDegree; threads = threads, blocks = blocks)
+
+    return Array(resultmultimodarr), Array(resultDegrees)
 end
 
 """
@@ -205,7 +319,7 @@ end
 
 Kernel function for gpu_ntt!()
 """
-function gpu_ntt_kernel!(vec::CuDeviceArray{Int}, primearray::CuDeviceVector{Int}, theta_m::CuDeviceVector{Int}, magic::Int, m2::Int)
+function gpu_ntt_kernel!(vec::CuDeviceArray{T}, primearray::CuDeviceVector{Int}, theta_m::CuDeviceVector{Int}, magic::Int, m2::Int) where T<:Integer
     idx = threadIdx().x + (blockIdx().x - 1) * blockDim().x - 1
     k = Int(2 * m2 * (idx % magic) + floor(idx/magic))
 
@@ -213,7 +327,7 @@ function gpu_ntt_kernel!(vec::CuDeviceArray{Int}, primearray::CuDeviceVector{Int
         theta = power_mod(theta_m[p], idx ÷ magic, primearray[p])
         t = theta * vec[p, k + m2 + 1]
         u = vec[p, k + 1]
-
+        
         vec[p, k + 1] = faster_mod(u + t, primearray[p])
         vec[p, k + m2 + 1] = faster_mod(u - t, primearray[p])
     end

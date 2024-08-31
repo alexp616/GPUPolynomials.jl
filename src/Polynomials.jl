@@ -1,6 +1,6 @@
 module Polynomials
 
-export HomogeneousPolynomial, sort_to_kronecker_order, easy_print, kronecker, DensePolynomial, SparsePolynomial, random_homogeneous_polynomial, pretty_string, kronecker_substitution, decode_kronecker_substitution, change_encoding, convert_to_oscar
+export HomogeneousPolynomial, sort_to_kronecker_order, easy_print, kronecker, DensePolynomial, SparsePolynomial, random_homogeneous_polynomial, pretty_string, kronecker_substitution, decode_kronecker_substitution, change_encoding, convert_to_oscar, remove_zeros
 
 using CUDA
 using Oscar
@@ -22,7 +22,7 @@ mutable struct HomogeneousPolynomial{T<:Integer}
     homogeneousDegree::Int
 end
 
-function HomogeneousPolynomial(coeffs::Vector{Int}, degrees::Array{Int, 2})
+function HomogeneousPolynomial(coeffs::Vector{T}, degrees::Array{Int, 2}) where T<:Integer
     @assert length(coeffs) == size(degrees, 1)
     return HomogeneousPolynomial(coeffs, degrees, sum(degrees[1, :]))
 end
@@ -47,6 +47,15 @@ function HomogeneousPolynomial(p::FqMPolyRingElem, type::DataType = Int)
     exponent_mat = reduce(vcat,transpose.(exp_vecs))
   
     return HomogeneousPolynomial(coeffs_as_int64arr,exponent_mat)
+end
+
+function remove_zeros(poly::HomogeneousPolynomial)
+    nonzero_indices = findall(c -> c != 0, poly.coeffs)
+    
+    poly.coeffs = poly.coeffs[nonzero_indices]
+    poly.degrees = poly.degrees[nonzero_indices, :]
+    
+    return poly
 end
 
 function sort_to_kronecker_order(hp::HomogeneousPolynomial, key::Int)
@@ -291,19 +300,23 @@ function change_encoding(num::Int, e1::Int, e2::Int, numValues::Int)
     return result
 end
 
-function convert_to_oscar(hp::HomogeneousPolynomial, ring::FqMPolyRing)
+function convert_to_oscar(hp::HomogeneousPolynomial, ring::MPolyRing)
     vars = gens(ring)
+    println("Got generators of ring")
     numVars = size(hp.degrees, 2)
 
     @assert length(vars) == numVars "Number of variables of hp and ring not compatible"
 
     result = zero(ring)
 
+    println("Started iterating through")
     for (i, coeff) in enumerate(hp.coeffs)
+        println("Made iteration $i / $(length(hp.coeffs))")
         expRow = hp.degrees[i, :]
         term = coeff * prod(vars[j] ^ expRow[j] for j in 1:numVars)
         result += term
     end
+
 
     return result
 end

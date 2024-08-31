@@ -10,13 +10,15 @@ using Random
 """
     Delta1Pregen
 
-Struct that contains almost anything that can be computed for the Delta1 algorithm. See pregen_delta1() to actually generate this
+Struct that contains everything that can be pre-computed for the Delta1 algorithm. See pregen_delta1() to actually generate this object
 
 # Fields
 - `numVars`: number of variables of polynomial
 - `prime`: chosen prime number
 - `step1pregen`: pregen object for first gpu_pow() step
 - `step2pregen`: pregen object for second gpu_pow() step
+- `step1TotalDegree`: homogeneous degree after first step
+- `step2TotalDegree`: homogeneous degree after second step
 - `inputLen1`: Length of first gpu_pow()'s input
 - `inputLen2`: Length of second gpu_pow()'s input
 - `key1`: Key for encoding multiple variables into 1 for first step
@@ -56,11 +58,11 @@ end
 
 function pregen_delta1_4_7()
     primeArray1 = [2654209]
-    primeArray2 = [69206017, 23068673]
+    primeArray2 = [23068673, 69206017, 81788929, 104857601]
     crtType1 = Int64
     crtType2 = Int128
     resultType1 = Int64
-    resultType2 = Int64
+    resultType2 = Int128
 
     # Restricted monomials have max degree 3, so raising to 7 - 1 = 7 results in max degree 18
     step1ResultDegree = 18
@@ -299,25 +301,24 @@ function in_power_of_variable_ideal(m, hp)
     return true
 end
 
-function delta1(intermediate::HomogeneousPolynomial, prime::Int, pregen::Delta1Pregen, output = nothing)
-    if output === nothing
-        input2 = CuArray(kronecker_substitution(intermediate, pregen.key2, pregen.inputLen2))
-    else
-        input2 = change_polynomial_encoding(output, pregen)
+function delta1(intermediate::HomogeneousPolynomial, prime::Int; pregen::Delta1Pregen)
+    input2 = CuArray(kronecker_substitution(intermediate, pregen.key2, pregen.inputLen2))
+    if prime == 7
+        result = gpu_pow_cpu_crt(intermediate, prime, pregen.key2; pregen = pregen.step2pregen)
+    else 
+        output2 = gpu_pow(input2, prime; pregen = pregen.step2pregen)
+        result = decode_kronecker_substitution(output2, pregen.key2, pregen.numVars, pregen.step2TotalDegree)
     end
-
-    output2 = gpu_pow(input2, prime; pregen = pregen.step2pregen)
-    # gpu_remove_pth_power_terms!(output2, pregen.forgetIndices)
-    result = decode_kronecker_substitution(output2, pregen.key2, pregen.numVars, pregen.step2TotalDegree)
 
     cpu_remove_pth_power_terms!(result,intermediate,prime)
 
     # for i in eachindex(result.coeffs)
-    #     if (result.coeffs[i] % prime != 0 && i % 70000 == 0)
-    #         println("WC: $i, degrees: $(result.degrees[i])")
+    #     if (result.coeffs[i] % 7 != 0)
+    #         println("coeff: $(result.coeffs[i]) degrees: $(result.degrees[i, :]) coeff % 7 = $(result.coeffs[i] % 7)")
     #     end
     # end
-    result.coeffs ./= prime
+
+    result.coeffs = map(x -> div(x, prime), result.coeffs)
     result.coeffs .%= prime
 
     return result
@@ -340,50 +341,6 @@ function gpu_remove_pth_power_terms!(output2, forgetIndices)
 
     kernel(output2, forgetIndices; threads = threads, blocks = blocks)
     return
-end
-
-function new_process(hp::HomogeneousPolynomial, prime, pregen::Delta1Pregen)
-    output1, intermediate, isfsplit = raise_to_p_minus_1(hp, prime, pregen)
-    result = delta1(intermediate, prime, pregen, output1)
-    result
-end
-
-function old_process(hp::HomogeneousPolynomial, prime, pregen::Delta1Pregen)
-    @assert prime == pregen.prime && size(hp.degrees, 2) == pregen.numVars "Current pregen isn't compatible with input"
-    
-    # Raising f ^ p - 1
-    input1 = CuArray(kronecker_substitution(hp, pregen.key1, pregen.inputLen1))
-    output1 = gpu_pow(input1, prime - 1; pregen = pregen.step1pregen)
-
-    # Reduce mod p
-    output1 = map(num -> faster_mod(num, prime), output1)
-    # Raising g ^ p
-    input2 = CuArray(change_polynomial_encoding(output1, pregen))
-
-    output2 = gpu_pow(input2, prime; pregen = pregen.step2pregen)
-    result = decode_kronecker_substitution(output2, pregen.key2, pregen.numVars, pregen.key2 - 1)
-
-    intermediate = decode_kronecker_substitution(output1, pregen.key1, pregen.numVars, pregen.key1 - 1)
-
-    cpu_remove_pth_power_terms!(result,intermediate,prime)
-
-    # # Here for debug purposes
-    # for i in 1:length(result.coeffs)
-    # # for i in 80250:80350
-    #     if result.coeffs[i] % prime != 0
-    #         println("WRONG COEFFICIENT $i: $(result.coeffs[i]), $(result.degrees[i, :])")
-    #     end
-    # end
-    # if result.coeffs[10000] % prime != 0
-    #     println("WRONG COEFFICIENT 10000: $(result.coeffs[10000]), $(result.degrees[10000, :])")
-    # end
-
-    result.coeffs ./= prime
-
-    result.coeffs .%= prime
-
-    #return (intermediate, result, finalresult
-    result
 end
 
 end
