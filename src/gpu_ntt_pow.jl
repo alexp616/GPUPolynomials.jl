@@ -20,7 +20,7 @@ struct GPUPowPregen
     log2len::Int
     lenInverseArray::Vector{Int}
     pregenButterfly::CuVector{Int}
-    crtPregen::CuArray{T} where T<:Integer
+    crtPregen::Array{T} where T<:Integer
     resultType::DataType
 end
 
@@ -134,31 +134,45 @@ function gpu_pow_cpu_crt(hp::HomogeneousPolynomial{T}, pow::Int, key = 0; pregen
         end
         println("Pregeneration took $(pregenTime.time) s")
     end
+    ntttime = CUDA.@timed begin
+        vec = CuArray(kronecker_substitution(hp, key, inputLen))
 
-    vec = CuArray(kronecker_substitution(hp, key, inputLen))
+        stackedvec = repeat(((vcat(vec, zeros(T, pregen.len - length(vec))))[pregen.pregenButterfly])', length(pregen.primeArray), 1)
 
-    stackedvec = repeat(((vcat(vec, zeros(T, pregen.len - length(vec))))[pregen.pregenButterfly])', length(pregen.primeArray), 1)
+        gpu_ntt!(stackedvec, pregen.primeArray, pregen.npruArray, pregen.len, pregen.log2len)
 
-    gpu_ntt!(stackedvec, pregen.primeArray, pregen.npruArray, pregen.len, pregen.log2len)
+        broadcast_pow!(stackedvec, pregen.primeArray, pow)
 
-    broadcast_pow!(stackedvec, pregen.primeArray, pow)
-
-    gpumultimod = gpu_intt(stackedvec, pregen)
-    CUDA.unsafe_free!(stackedvec)
-    multimodResult, resultDegrees = sparsify(gpumultimod, size(hp.degrees, 2), key, hp.homogeneousDegree * pow)
-    CUDA.unsafe_free!(gpumultimod)
-    multimodResult = BigInt.(multimodResult)
-    resultCoeffs = zeros(pregen.resultType, size(multimodResult, 2))
-
-    crtpregen = BigInt.(Array(pregen.crtPregen))
-
-    for col in axes(multimodResult, 2)
-        x = multimodResult[1, col]
-        for i in axes(crtpregen, 2)
-            x = mod(x * crtpregen[2, i] + multimodResult[i + 1, col] * crtpregen[1, i], crtpregen[3, i])
-        end
-        resultCoeffs[col] = pregen.resultType(x)
+        gpumultimod = gpu_intt(stackedvec, pregen)
+        CUDA.unsafe_free!(stackedvec)
     end
+
+    println("ntt took $(ntttime.time) s")
+
+    sparsifytime = CUDA.@timed begin
+        multimodResult, resultDegrees = sparsify(gpumultimod, size(hp.degrees, 2), key, hp.homogeneousDegree * pow)
+        CUDA.unsafe_free!(gpumultimod)
+        multimodResult = BigInt.(multimodResult)
+        resultCoeffs = zeros(pregen.resultType, size(multimodResult, 2))
+    end
+    println("sparsifying took $(sparsifytime.time) s")
+
+    biginttime = @timed begin
+        crtpregen = BigInt.(pregen.crtPregen)
+    end
+    
+    println("converting everything to bigint took $(biginttime.time) s")
+
+    crttime = @timed begin
+        for col in axes(multimodResult, 2)
+            x = multimodResult[1, col]
+            for i in axes(crtpregen, 2)
+                x = mod(x * crtpregen[2, i] + multimodResult[i + 1, col] * crtpregen[1, i], crtpregen[3, i])
+            end
+            resultCoeffs[col] = pregen.resultType(x)
+        end
+    end
+    println("crt took $(crttime.time) s")
 
     return HomogeneousPolynomial(resultCoeffs, resultDegrees)
 end
@@ -341,17 +355,18 @@ end
 
 Combines all rows of multimodularResultArr using Chinese Remainder Theorem
 """
-function build_result(multimodularResultArr::CuArray{Int, 2}, crtPregen::CuArray{T, 2}, resultType::DataType) where T<:Integer
+function build_result(multimodularResultArr::CuArray{Int, 2}, crtPregen::Array{T, 2}, resultType::DataType) where T<:Integer
     # @assert size(multimodularResultArr, 1) == length(primearray) "number of rows of input array and number of primes must be equal"
 
     result = T.(multimodularResultArr[1, :])
+    cu_crtPregen = CuArray(crtPregen)
 
-    kernel = @cuda launch=false build_result_kernel(result, multimodularResultArr, crtPregen)
+    kernel = @cuda launch=false build_result_kernel(result, multimodularResultArr, cu_crtPregen)
     config = launch_configuration(kernel.fun)
     threads = min(length(result), prevpow(2, config.threads))
     blocks = cld(length(result), threads)
 
-    kernel(result, multimodularResultArr, crtPregen; threads = threads, blocks = blocks)
+    kernel(result, multimodularResultArr, cu_crtPregen; threads = threads, blocks = blocks)
 
     return resultType.(result)
 end

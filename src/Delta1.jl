@@ -58,6 +58,7 @@ end
 
 function pregen_delta1_4_7()
     primeArray1 = [2654209]
+    # [167772161, 377487361, 469762049]
     primeArray2 = [23068673, 69206017, 81788929, 104857601]
     crtType1 = Int64
     crtType2 = Int128
@@ -140,7 +141,7 @@ function pregen_delta1(numVars::Int, prime::Int)
 
     # forgetIndices = generate_forget_indices(numVars, prime, key2)
 
-    return Delta1Pregen(numVars, prime, step1Pregen, step2Pregen, inputLen1, inputLen2, key1, key2)
+    return Delta1Pregen(numVars, prime, step1Pregen, step2Pregen, step1TotalDegree, step2TotalDegree, inputLen1, inputLen2, key1, key2)
 end
 
 """

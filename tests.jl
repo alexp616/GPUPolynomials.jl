@@ -86,42 +86,6 @@ function test_gpu_pow()
     @test oscar_result == gpu_back
 end
 
-# function time_K3_7()
-#     println("Running K3_7 test...")
-#     Random.seed!()
-
-#     R, vars = polynomial_ring(GF(7), 4)
-#     x1, x2, x3, x4 = vars
-
-#     # Restricted monomials: Contains no x1^4, x2^4, x3^4
-#     mons = [x1^3*x2, x1^3*x3, x1^3*x4, x1^2*x2^2, x1^2*x2*x3, x1^2*x2*x4, x1^2*x3^2, x1^2*x3*x4, x1^2*x4^2, x1*x2^3, x1*x2^2*x3, x1*x2^2*x4, x1*x2*x3^2, x1*x2*x3*x4, x1*x2*x4^2, x1*x3^3, x1*x3^2*x4, x1*x3*x4^2, x1*x4^3, x2^3*x3, x2^3*x4, x2^2*x3^2, x2^2*x3*x4, x2^2*x4^2, x2*x3^3, x2*x3^2*x4, x2*x3*x4^2, x2*x4^3, x3^3*x4, x3^2*x4^2, x3*x4^3, x4^4]
-
-#     pregentime = @timed begin
-#         pregen = pregen_delta1(4, 7)
-#     end
-
-#     println("pregen.inputLen1: ", pregen.inputLen1)
-#     println("Pregenerating took $(pregentime.time) s\n")
-    
-#     f = random_homog_poly_mod_restricted(7, vars, mons)
-#     println("f: $f\n")
-#     step1time = @timed begin 
-#         fpminus1 = f ^ 6
-#     end
-#     println("Raising f to the 6th power took $(step1time.time) s.\nf ^ 6 has $(length(fpminus1)) terms\n")
-
-#     fpminus1_gpu = HomogeneousPolynomial(fpminus1)
-
-#     sort_to_kronecker_order(fpminus1_gpu, pregen.key1)
-
-#     # for name in fieldnames(typeof(pregen))
-#     #     println("$(name): $(getfield(pregen, name))")
-#     # end
-#     Δ_1fpminus1_gpu = delta1(fpminus1_gpu, 7, pregen)
-#     println("result has $(length(Δ_1fpminus1_gpu.coeffs)) terms")
-#     @test 1 == 1
-# end
-
 function test_K3_7()
     println("Running K3_7 test...")
     Random.seed!()
@@ -159,6 +123,51 @@ function test_K3_7()
         fpminus1_gpu = HomogeneousPolynomial(fpminus1)
         sort_to_kronecker_order(fpminus1_gpu, pregen.key1)
         Δ_1fpminus1_gpu = delta1(fpminus1_gpu, 7; pregen = pregen)
+        # gpu_result = convert_to_oscar(Δ_1fpminus1_gpu, sus)
+    end
+
+    oscar_result_hp = HomogeneousPolynomial(oscar_result)
+    sort_to_kronecker_order(oscar_result_hp, pregen.key2)
+
+    println("GPU delta1 took $(gputime.time) s")
+    remove_zeros(Δ_1fpminus1_gpu)
+    
+    @test oscar_result_hp.coeffs == Δ_1fpminus1_gpu.coeffs
+    @test oscar_result_hp.degrees == Δ_1fpminus1_gpu.degrees
+end
+
+function test_K3_5()
+    println("Running K3_5 test...")
+    Random.seed!()
+
+    R, vars = polynomial_ring(GF(5), 4)
+    x1, x2, x3, x4 = vars
+
+    pregentime = @timed begin
+        pregen = pregen_delta1(4, 5)
+    end
+
+    println("Pregenerating took $(pregentime.time) s\n")
+    
+    f = random_homog_poly_mod(5, vars, 4)
+
+    # f = 6*x1^3*x2 + 3*x1^3*x3 + 2*x1^2*x2*x3 + 3*x1^2*x2*x4 + 5*x1^2*x3*x4 + x1^2*x4^2 + 2*x1*x2^3 + 5*x1*x2^2*x4 + 6*x1*x2*x3^2 + 2*x1*x2*x3*x4 + 5*x1*x2*x4^2 + 6*x1*x3^3 + 4*x1*x3^2*x4 + 2*x1*x3*x4^2 + 4*x1*x4^3 + x2^3*x3 + x2^3*x4 + x2^2*x3^2 + 6*x2^2*x3*x4 + 2*x2^2*x4^2 + 4*x2*x3^3 + 4*x2*x3^2*x4 + 6*x2*x4^3 + 5*x3^3*x4 + x3*x4^3 + x4^4
+
+    # f = 6*x1^3*x2 + 3*x1^3*x3 + 2*x1^2*x2*x3 + 3*x1^2*x2*x4 + 5*x1^2*x3*x4 + x1^2*x4^2 + 2*x1*x2^3 + 5*x1*x2^2*x4 + 6*x1*x2*x3^2 + 2*x1*x2*x3*x4 + 5*x1*x2*x4^2 + 6*x1*x3^3
+
+    # f = x1^2*x2^2 + x1^2*x3^2 + x1^2*x4^2 + x2^2*x4^2 + x2^2*x3^2 + x3^2*x4^2 + x4^4
+    # f = 2*x1^2*x2^2 + x4^4
+    fpminus1 = f ^ 4
+    oscartime = @timed begin
+        oscar_result = oscar_delta1(5, fpminus1)
+    end
+
+    println("Oscar delta1 took $(oscartime.time) s")
+
+    gputime = CUDA.@timed begin
+        fpminus1_gpu = HomogeneousPolynomial(fpminus1)
+        sort_to_kronecker_order(fpminus1_gpu, pregen.key1)
+        Δ_1fpminus1_gpu = delta1(fpminus1_gpu, 5; pregen = pregen)
         # gpu_result = convert_to_oscar(Δ_1fpminus1_gpu, sus)
     end
 
@@ -248,10 +257,12 @@ function test_remove_zeros()
 end
 
 @testset "gpu_pow" begin
-    # test_gpu_pow_no_pregen()
-    # test_gpu_pow()
+    test_gpu_pow_no_pregen()
+    test_gpu_pow()
+    test_K3_5()
+    test_K3_7()
     # test_K3_7()
-    # test_remove_zeros()
+    test_remove_zeros()
     # time_K3_7()
-    profile_K3_7()
+    # profile_K3_7()
 end

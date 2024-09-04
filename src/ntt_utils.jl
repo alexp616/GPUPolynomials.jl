@@ -83,7 +83,7 @@ function pregen_crt(primeArray::Vector{Int}, crtType::DataType)
         result[3, i - 1] = currmod
     end
 
-    return CuArray(result)
+    return result
 end
 
 

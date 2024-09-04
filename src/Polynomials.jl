@@ -302,16 +302,13 @@ end
 
 function convert_to_oscar(hp::HomogeneousPolynomial, ring::MPolyRing)
     vars = gens(ring)
-    println("Got generators of ring")
     numVars = size(hp.degrees, 2)
 
     @assert length(vars) == numVars "Number of variables of hp and ring not compatible"
 
     result = zero(ring)
 
-    println("Started iterating through")
     for (i, coeff) in enumerate(hp.coeffs)
-        println("Made iteration $i / $(length(hp.coeffs))")
         expRow = hp.degrees[i, :]
         term = coeff * prod(vars[j] ^ expRow[j] for j in 1:numVars)
         result += term
