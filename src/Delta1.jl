@@ -59,7 +59,7 @@ end
 function pregen_delta1_4_7()
     primeArray1 = [2654209]
     # [167772161, 377487361, 469762049]
-    primeArray2 = [23068673, 69206017, 81788929, 104857601]
+    primeArray2 = [167772161, 377487361, 469762049]
     crtType1 = Int64
     crtType2 = Int128
     resultType1 = Int64
