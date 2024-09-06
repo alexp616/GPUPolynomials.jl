@@ -147,7 +147,7 @@ function gpu_pow_cpu_crt(hp::HomogeneousPolynomial{T}, pow::Int, key = 0; pregen
         CUDA.unsafe_free!(stackedvec)
     end
 
-    println("ntt took $(ntttime.time) s")
+    # println("ntt took $(ntttime.time) s")
 
     sparsifytime = CUDA.@timed begin
         multimodResult, resultDegrees = sparsify(gpumultimod, size(hp.degrees, 2), key, hp.homogeneousDegree * pow)
@@ -155,13 +155,13 @@ function gpu_pow_cpu_crt(hp::HomogeneousPolynomial{T}, pow::Int, key = 0; pregen
         multimodResult = BigInt.(multimodResult)
         resultCoeffs = zeros(pregen.resultType, size(multimodResult, 2))
     end
-    println("sparsifying took $(sparsifytime.time) s")
+    # println("sparsifying took $(sparsifytime.time) s")
 
     biginttime = @timed begin
         crtpregen = BigInt.(pregen.crtPregen)
     end
     
-    println("converting everything to bigint took $(biginttime.time) s")
+    # println("converting everything to bigint took $(biginttime.time) s")
 
     crttime = @timed begin
         for col in axes(multimodResult, 2)
@@ -172,7 +172,7 @@ function gpu_pow_cpu_crt(hp::HomogeneousPolynomial{T}, pow::Int, key = 0; pregen
             resultCoeffs[col] = pregen.resultType(x)
         end
     end
-    println("crt took $(crttime.time) s")
+    # println("crt took $(crttime.time) s")
 
     return HomogeneousPolynomial(resultCoeffs, resultDegrees)
 end
