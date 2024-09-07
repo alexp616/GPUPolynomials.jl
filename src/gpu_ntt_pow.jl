@@ -6,6 +6,7 @@ include("ntt_utils.jl")
 
 using ..Polynomials
 using CUDA
+using BitIntegers
 
 """
     GPUPowPregen
@@ -152,12 +153,12 @@ function gpu_pow_cpu_crt(hp::HomogeneousPolynomial{T}, pow::Int, key = 0; pregen
     sparsifytime = CUDA.@timed begin
         multimodResult, resultDegrees = sparsify(gpumultimod, size(hp.degrees, 2), key, hp.homogeneousDegree * pow)
         CUDA.unsafe_free!(gpumultimod)
-        multimodResult = BigInt.(multimodResult)
+        multimodResult = pregen.crtType.(multimodResult)
         resultCoeffs = zeros(pregen.resultType, size(multimodResult, 2))
     end
     # println("sparsifying took $(sparsifytime.time) s")
 
-    crtpregen = BigInt.(pregen.crtPregen)
+    crtpregen = crtType.(pregen.crtPregen)
     
     # println("converting everything to bigint took $(biginttime.time) s")
 

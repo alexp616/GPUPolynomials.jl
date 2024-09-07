@@ -6,6 +6,7 @@ using ..Polynomials
 using ..GPUPow
 using Oscar
 using CUDA
+using BitIntegers
 
 # Max degree for restricted 11:
 # x^3*y -> x^330*y^110 = 330 * 331^2 + 110 * 331 + 1 = 36191541
@@ -53,34 +54,21 @@ function get_result()
         result6 = Array(gpu_pow(vec, 11; pregen = pregen6))
         println("Got through 6")
     end
-    a = BigInt.(vcat(result1', result2', result3', result4', result5', result6'))
-    b = pregen_crt([2281701377, 3221225473, 3489660929, 3892314113, 7918845953, 8858370049], BigInt)
+    a = Int512.(vcat(result1', result2', result3', result4', result5', result6'))
+    b = pregen_crt([2281701377, 3221225473, 3489660929, 3892314113, 7918845953, 8858370049], Int512)
 
     return (a, b)
 end
 
 function crt(a, b)
-    result = zeros(BigInt, size(vcat, 2))
-    do_crt(a, b; dest = result)
+    result = zeros(Int256, size(vcat, 2))
 
-    # for i in eachindex(result)
-    #     if result.coeffs[i] % 11 != 0
-    #         throw(skibidi)
-    #     end
-    # end
-
+    crttime = @timed GPUPow.do_crt(a, b; dest = result)
+    println("crt took $(crttime.time) s")
     max_value, max_index = findmax(result)
     println("max_value: ", max_value)
     println("max_index: ", max_index)
 
-    
-    # gpuresult = decode_kronecker_substitution(result1, 331, 4, 440)
-
-    # for i in eachindex(result1.coeffs)
-    #     if result1.coeffs[i] % 11 != 0
-    #         throw(skibidi)
-    #     end
-    # end
 
 
     # max_value, max_index = findmax(result.coeffs)
