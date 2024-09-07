@@ -1,6 +1,6 @@
 module GPUPow
 
-export GPUPowPregen, pregen_gpu_pow, gpu_pow, gpu_pow_cpu_crt
+export GPUPowPregen, pregen_gpu_pow, gpu_pow, gpu_pow_cpu_crt, do_crt
 
 include("ntt_utils.jl")
 
@@ -157,24 +157,47 @@ function gpu_pow_cpu_crt(hp::HomogeneousPolynomial{T}, pow::Int, key = 0; pregen
     end
     # println("sparsifying took $(sparsifytime.time) s")
 
-    biginttime = @timed begin
-        crtpregen = BigInt.(pregen.crtPregen)
-    end
+    crtpregen = BigInt.(pregen.crtPregen)
     
     # println("converting everything to bigint took $(biginttime.time) s")
 
-    crttime = @timed begin
-        for col in axes(multimodResult, 2)
-            x = multimodResult[1, col]
-            for i in axes(crtpregen, 2)
-                x = mod(x * crtpregen[2, i] + multimodResult[i + 1, col] * crtpregen[1, i], crtpregen[3, i])
-            end
-            resultCoeffs[col] = pregen.resultType(x)
-        end
-    end
+    do_crt(multimodResult, crtpregen; dest = resultCoeffs)
+    # for col in axes(multimodResult, 2)
+    #     x = multimodResult[1, col]
+    #     for i in axes(crtpregen, 2)
+    #         x = mod(x * crtpregen[2, i] + multimodResult[i + 1, col] * crtpregen[1, i], crtpregen[3, i])
+    #     end
+    #     resultCoeffs[col] = pregen.resultType(x)
+    # end
     # println("crt took $(crttime.time) s")
 
     return HomogeneousPolynomial(resultCoeffs, resultDegrees)
+end
+
+function do_crt(multimodarr, pregen)
+    result = zeros(eltype(multimodarr), size(multimodarr, 2))
+
+    for col in axes(multimodarr, 2)
+        x = multimodarr[1, col]
+        for i in axes(pregen, 2)
+            x = mod(x * pregen[2, i] + multimodarr[i + 1, col] * pregen[1, i], pregen[3, i])
+        end
+        result[col] = x
+    end
+
+    return result
+end
+
+function do_crt(multimodarr, pregen; dest)
+    for col in axes(multimodarr, 2)
+        x = multimodarr[1, col]
+        for i in axes(pregen, 2)
+            x = mod(x * pregen[2, i] + multimodarr[i + 1, col] * pregen[1, i], pregen[3, i])
+        end
+        dest[col] = x
+    end
+
+    return
 end
 
 # function generate_flags_kernel!(flags::CuVector{Int32}, multimodarr::CuMatrix{T}) where T<:Integer
