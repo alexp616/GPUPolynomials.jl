@@ -1,6 +1,8 @@
 module Polynomials
 
-export HomogeneousPolynomial, sort_to_kronecker_order, easy_print, kronecker, DensePolynomial, SparsePolynomial, random_homogeneous_polynomial, pretty_string, kronecker_substitution, decode_kronecker_substitution, change_encoding, convert_to_oscar, remove_zeros
+export HomogeneousPolynomial, sort_to_kronecker_order, easy_print, kronecker, DensePolynomial, SparsePolynomial, random_homogeneous_polynomial, pretty_string, kronecker_substitution, decode_kronecker_substitution, change_encoding, convert_to_oscar, remove_zeros, ==
+
+import Base: ==
 
 using CUDA
 using Oscar
@@ -27,18 +29,27 @@ function HomogeneousPolynomial(coeffs::Vector{T}, degrees::Array{Int, 2}) where 
     return HomogeneousPolynomial(coeffs, degrees, sum(degrees[1, :]))
 end
 
+function ==(hp1::HomogeneousPolynomial, hp2::HomogeneousPolynomial)
+    return (hp1.coeffs == hp2.coeffs) && (hp1.degrees == hp2.degrees)
+end
+
 """
-    HomogeneousPolynomial(p::FqMPolyRingElem)
+    HomogeneousPolynomial(p::MPoly)
 
 Convert Oscar polynomial to HomogeneousPolynomial datastructure
 """
-function HomogeneousPolynomial(p::FqMPolyRingElem, type::DataType = Int)
+function HomogeneousPolynomial(p::MPolyRingElem, type::DataType = Int)
     coeffs = coefficients(p)
   
     # julia by default doesn't realize that "ZZ" is not
     # an array, so insert it as a one-element tuple "(ZZ,)"
     # so that julia will know not to broadcast along it.
-    coeffs_as_int64arr = type.(lift.((ZZ,),coeffs))
+    if p isa FqMPolyRingElem
+        coeffs_as_int64arr = type.(lift.((ZZ,),coeffs))
+    else
+        coeffs_as_int64arr = type.(coeffs)
+    end
+    
 
     exp_vecs = leading_exponent_vector.(terms(p))
 

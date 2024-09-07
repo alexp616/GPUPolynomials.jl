@@ -56,6 +56,24 @@ function generate_forget_indices(numVars, prime, key)
     return CuArray(result)
 end
 
+function pregen_delta1_restricted(numVars, prime)
+    if (numVars, prime) == (4, 7)
+        primeArray1 = [2654209]
+        primeArray2 = [167772161, 377487361, 469762049]
+        crtType1 = Int64
+        crtType2 = Int128
+        resultType1 = Int64
+        resultType2 = Int128
+    elseif (numVars, prime) == (4, 11)
+        primeArray1 = [12289]
+        primeArray2 = [114689]
+        crtType1 = Int64
+        crtType2 = Int64
+        resultType1 = Int64
+        resultType2 = Int64
+    end
+end
+
 function pregen_delta1_4_7()
     primeArray1 = [2654209]
     # [167772161, 377487361, 469762049]

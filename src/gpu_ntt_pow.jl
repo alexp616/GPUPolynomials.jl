@@ -122,7 +122,7 @@ end
 
 function gpu_pow_cpu_crt(hp::HomogeneousPolynomial{T}, pow::Int, key = 0; pregen::Union{GPUPowPregen, Nothing} = nothing) where T<:Integer
     if key == 0
-        key = hp.homogeneousDegree * pow + 1    
+        key = hp.homogeneousDegree * pow + 1
     end
 
     inputLen = hp.homogeneousDegree * (key) ^ (size(hp.degrees, 2) - 2) + 1
