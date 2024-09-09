@@ -61,7 +61,7 @@ function pregen_delta1_restricted(numVars, prime)
         primeArray1 = [2654209]
         primeArray2 = [167772161, 377487361, 469762049]
         crtType1 = Int64
-        crtType2 = Int128
+        crtType2 = BigInt
         resultType1 = Int64
         resultType2 = Int128
     elseif (numVars, prime) == (4, 11)
@@ -79,7 +79,7 @@ function pregen_delta1_4_7()
     # [167772161, 377487361, 469762049]
     primeArray2 = [167772161, 377487361, 469762049]
     crtType1 = Int64
-    crtType2 = Int128
+    crtType2 = BigInt
     resultType1 = Int64
     resultType2 = Int128
 
@@ -137,15 +137,27 @@ function pregen_delta1(numVars::Int, prime::Int)
     elseif (numVars, prime) == (4, 7)
         return pregen_delta1_4_7()
     elseif (numVars, prime) == (5, 2)
-        primeArray1 = [2654209]
-        primeArray2 = [13631489, 23068673]
+        primeArray1 = [65537]
+        primeArray2 = [65537]
         crtType1 = Int64
         crtType2 = Int64
         resultType1 = Int64
         resultType2 = Int64
     elseif (numVars, prime) == (5, 3)
-
+        # I haven't actually generated primes for the first step, since I'm lazy
+        primeArray1 = [65537]
+        primeArray2 = [7340033]
+        crtType1 = Int64
+        crtType2 = Int64
+        resultType1 = Int64
+        resultType2 = Int64
     elseif (numVars, prime) == (5, 5)
+        primeArray1 = [7340033]
+        primeArray2 = [2013265921, 2281701377]
+        crtType1 = Int64
+        crtType2 = Int128
+        resultType1 = Int64
+        resultType2 = Int64
     else
         throw("I havent figured out these bounds yet")
     end

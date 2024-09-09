@@ -149,11 +149,11 @@ function gpu_pow_cpu_crt(hp::HomogeneousPolynomial{T}, pow::Int, key = 0; pregen
     end
 
     # println("ntt took $(ntttime.time) s")
-
+    crtType = eltype(pregen.crtPregen)
     sparsifytime = CUDA.@timed begin
         multimodResult, resultDegrees = sparsify(gpumultimod, size(hp.degrees, 2), key, hp.homogeneousDegree * pow)
         CUDA.unsafe_free!(gpumultimod)
-        multimodResult = pregen.crtType.(multimodResult)
+        multimodResult = crtType.(multimodResult)
         resultCoeffs = zeros(pregen.resultType, size(multimodResult, 2))
     end
     # println("sparsifying took $(sparsifytime.time) s")

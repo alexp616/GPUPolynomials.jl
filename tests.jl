@@ -35,7 +35,121 @@ function oscar_delta1(p,poly)
   
     change_coefficient_ring(coefficient_ring(R),Δlift,parent=R)
   
-  end#
+end#
+
+function test_5_2()
+    n = 5
+    p = 2
+    R, vars = polynomial_ring(GF(p), n)
+    f = random_homog_poly_mod(p, vars, n)
+
+    println("Starting n = $n, p = $p...")
+    pregentime = @timed begin
+        pregen = pregen_delta1(n, p)
+    end
+    println("Pregenerating took $(pregentime.time) s")
+    
+
+    firststeptime = @timed begin
+        fpminus1 = f ^ (p - 1)
+    end
+    println("First step took $(firststeptime.time) s")
+
+    fp1_gpu = HomogeneousPolynomial(fpminus1)
+    sort_to_kronecker_order(fp1_gpu, pregen.key1)
+
+    gputime = CUDA.@timed begin
+        gpu_result = delta1(fp1_gpu, p; pregen = pregen)
+    end
+    println("GPU Delta1 took $(gputime.time) s")
+
+    remove_zeros(gpu_result)
+
+    oscartime = CUDA.@timed begin
+        temp = oscar_delta1(p, fpminus1)
+    end
+    println("Oscar Delta1 took $(oscartime.time) s")
+
+    oscar_result = HomogeneousPolynomial(temp)
+    sort_to_kronecker_order(oscar_result, pregen.key2)
+
+    @test oscar_result == gpu_result
+    println()
+end
+
+function test_5_3()
+    n = 5
+    p = 3
+    R, vars = polynomial_ring(GF(p), n)
+    f = random_homog_poly_mod(p, vars, n)
+
+    println("Starting n = $n, p = $p...")
+    pregen = pregen_delta1(n, p)
+    
+
+    firststeptime = @timed begin
+        fpminus1 = f ^ (p - 1)
+    end
+    println("First step took $(firststeptime.time) s")
+
+    fp1_gpu = HomogeneousPolynomial(fpminus1)
+    sort_to_kronecker_order(fp1_gpu, pregen.key1)
+
+    gputime = CUDA.@timed begin
+        gpu_result = delta1(fp1_gpu, p; pregen = pregen)
+    end
+    println("GPU Delta1 took $(gputime.time) s")
+
+    remove_zeros(gpu_result)
+
+    oscartime = CUDA.@timed begin
+        temp = oscar_delta1(p, fpminus1)
+    end
+    println("Oscar Delta1 took $(oscartime.time) s")
+
+    oscar_result = HomogeneousPolynomial(temp)
+    sort_to_kronecker_order(oscar_result, pregen.key2)
+
+    @test oscar_result == gpu_result
+    println()
+end
+
+function test_5_5()
+    n = 5
+    p = 5
+    R, vars = polynomial_ring(GF(p), n)
+    f = random_homog_poly_mod(p, vars, n)
+
+    println("Starting n = $n, p = $p...")
+    pregen = pregen_delta1(n, p)
+    
+
+    firststeptime = @timed begin
+        fpminus1 = f ^ (p - 1)
+    end
+    println("First step took $(firststeptime.time) s")
+
+    fp1_gpu = HomogeneousPolynomial(fpminus1)
+    sort_to_kronecker_order(fp1_gpu, pregen.key1)
+
+    gputime = CUDA.@timed begin
+        gpu_result = delta1(fp1_gpu, p; pregen = pregen)
+    end
+    println("GPU Delta1 took $(gputime.time) s")
+
+    remove_zeros(gpu_result)
+
+    oscartime = CUDA.@timed begin
+        temp = oscar_delta1(p, fpminus1)
+    end
+    println("Oscar Delta1 took $(oscartime.time) s")
+
+    oscar_result = HomogeneousPolynomial(temp)
+    sort_to_kronecker_order(oscar_result, pregen.key2)
+
+    @test oscar_result == gpu_result
+    println()
+end
 
 function test_gpu_pow_no_pregen()
     Random.seed!()
@@ -86,6 +200,28 @@ function test_gpu_pow()
     @test oscar_result == gpu_back
 end
 
+function test_conversion_to_gpu()
+    R1, vars1 = polynomial_ring(GF(7), 4)
+    R2, vars2 = polynomial_ring(ZZ, 4)
+    (a, b, c, d) = vars1
+    (x, y, z, w) = vars2
+
+    f1 = a + b + c + d
+    f2 = x + y + z + w
+    
+    hp1 = HomogeneousPolynomial(f1)
+    hp2 = HomogeneousPolynomial(f2)
+    hp3 = HomogeneousPolynomial([1, 1, 1, 1], [
+        1 0 0 0
+        0 1 0 0
+        0 0 1 0
+        0 0 0 1
+    ])
+
+    @test hp1 == hp2
+    @test hp2 == hp3
+end
+
 function test_K3_7()
     println("Running K3_7 test...")
     Random.seed!()
@@ -123,7 +259,6 @@ function test_K3_7()
         fpminus1_gpu = HomogeneousPolynomial(fpminus1)
         sort_to_kronecker_order(fpminus1_gpu, pregen.key1)
         Δ_1fpminus1_gpu = delta1(fpminus1_gpu, 7; pregen = pregen)
-        # gpu_result = convert_to_oscar(Δ_1fpminus1_gpu, sus)
     end
 
     oscar_result_hp = HomogeneousPolynomial(oscar_result)
@@ -132,8 +267,7 @@ function test_K3_7()
     println("GPU delta1 took $(gputime.time) s")
     remove_zeros(Δ_1fpminus1_gpu)
     
-    @test oscar_result_hp.coeffs == Δ_1fpminus1_gpu.coeffs
-    @test oscar_result_hp.degrees == Δ_1fpminus1_gpu.degrees
+    @test oscar_result_hp == Δ_1fpminus1_gpu
 end
 
 function test_K3_5()
@@ -257,12 +391,15 @@ function test_remove_zeros()
 end
 
 @testset "gpu_pow" begin
+    test_5_2()
+    test_5_3()
+    # test_5_5() THIS THING ERRORS
     test_gpu_pow_no_pregen()
     test_gpu_pow()
     test_K3_5()
     test_K3_7()
-    # test_K3_7()
     test_remove_zeros()
-    # time_K3_7()
-    # profile_K3_7()
+    test_conversion_to_gpu()
+    time_K3_7()
+    profile_K3_7()
 end
