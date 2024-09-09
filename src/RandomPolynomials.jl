@@ -1,6 +1,6 @@
 #module RandomPolynomials
 #
-#using Combinatorics
+using Combinatorics
 
 """
 Returns a list of all monomials in varibles

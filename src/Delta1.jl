@@ -136,6 +136,16 @@ function pregen_delta1(numVars::Int, prime::Int)
         resultType2 = Int64
     elseif (numVars, prime) == (4, 7)
         return pregen_delta1_4_7()
+    elseif (numVars, prime) == (5, 2)
+        primeArray1 = [2654209]
+        primeArray2 = [13631489, 23068673]
+        crtType1 = Int64
+        crtType2 = Int64
+        resultType1 = Int64
+        resultType2 = Int64
+    elseif (numVars, prime) == (5, 3)
+
+    elseif (numVars, prime) == (5, 5)
     else
         throw("I havent figured out these bounds yet")
     end

@@ -247,7 +247,11 @@ function generate_result_kernel!(multimodarr, flags, indices, resultmultimodarr,
     return
 end
 
-function sparsify(multimodarr::CuMatrix{T}, numVars, key, totalDegree) where T<:Integer
+function sparsify(multimodarr::Union{CuMatrix{T}, Matrix{T}}, numVars, key, totalDegree) where T<:Integer
+    inputtype = typeof(multimodarr)
+    if multimodarr isa Matrix{T}
+        multimodarr = CuArray(multimodarr)
+    end
     flags = CUDA.zeros(Int32, size(multimodarr, 2))
 
     # Initialize one thread for each column
