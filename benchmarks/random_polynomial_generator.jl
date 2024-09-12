@@ -1,7 +1,7 @@
 module RandomPolynomialGenerator
 
-include("../src/GPUPolynomials.jl")
-using .Delta1
+#include("../src/GPUPolynomials.jl")
+#using .Delta1
 
 function generate_random_polynomials(numVars, modulus, numPolynomials, outputFile = "benchmarks/randompolynomials.txt")
     maxTerms = binomial(numVars + numVars - 1, numVars)
