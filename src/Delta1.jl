@@ -1,4 +1,4 @@
-module Delta1
+#module Delta1
 
 export Delta1Pregen, pregen_delta1, raise_to_p_minus_1, delta1
 
@@ -384,4 +384,4 @@ function gpu_remove_pth_power_terms!(output2, forgetIndices)
     return
 end
 
-end
+#end

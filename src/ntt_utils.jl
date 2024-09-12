@@ -1,8 +1,8 @@
 using CUDA
-using Test
+#using Test
 using Primes
 using BenchmarkTools
-using Dates
+#using Dates
 
 import Base.div
 
