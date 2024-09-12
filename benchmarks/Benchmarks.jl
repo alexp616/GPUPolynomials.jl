@@ -1,9 +1,9 @@
-module Benchmarks
+#module Benchmarks
 
-using Oscar
-using CUDA
-using DataFrames
-using CSV
+#using Oscar
+#using CUDA
+#using DataFrames
+#using CSV
 
 # include("../experimental stuff/TrivialMultiply.jl")
 include("../src/GPUPolynomials.jl")
@@ -122,4 +122,4 @@ function run_all_benchmarks(numSamples)
     nothing # don't spam the terminal
 end
 
-end
+#end
