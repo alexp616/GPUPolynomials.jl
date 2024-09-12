@@ -6,9 +6,9 @@
 #using CSV
 
 # include("../experimental stuff/TrivialMultiply.jl")
-include("../src/GPUPolynomials.jl")
+#include("../src/GPUPolynomials.jl")
 include("random_polynomial_generator.jl")
-using .Delta1
+#using .Delta1
 using .RandomPolynomialGenerator
 
 # for the Meta.parse thing to work, these have to be global varibles
