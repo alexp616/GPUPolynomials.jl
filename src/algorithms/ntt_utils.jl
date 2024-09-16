@@ -246,7 +246,7 @@ end
 
 # MONTGOMERY REDUCTION
 
-struct MontgomeryReducer{T<:Unsigned}
+struct MontReducer{T<:Unsigned}
     modulus::T
     rbits::Int
     r::T
@@ -255,7 +255,7 @@ struct MontgomeryReducer{T<:Unsigned}
     k::T
     convertedone::T
 
-    function MontgomeryReducer(n::Unsigned)
+    function MontReducer(n::Unsigned)
         rbits = (ndigits(n, base = 2) ÷ 8 + 1) * 8
         T = get_uint_type(Base._nextpow2(2 * rbits))
         modulus = T(n)
@@ -271,15 +271,15 @@ struct MontgomeryReducer{T<:Unsigned}
     end
 end
 
-function convert_in(mr::MontgomeryReducer, x::Unsigned)
+function convert_in(mr::MontReducer, x::Unsigned)
     return mod(typeof(mr.modulus)(x) << mr.rbits, mr.modulus) 
 end
 
-function convert_out(mr::MontgomeryReducer, x::Unsigned)
+function convert_out(mr::MontReducer, x::Unsigned)
     return mod(mr.rinv * x, mr.modulus)
 end
 
-function mul(mr::MontgomeryReducer, x::Unsigned, y::Unsigned)
+function mul(mr::MontReducer, x::Unsigned, y::Unsigned)
     m = mr.modulus
     product = x * y
     temp = ((product & mr.mask) * mr.k) & mr.mask
@@ -289,15 +289,15 @@ function mul(mr::MontgomeryReducer, x::Unsigned, y::Unsigned)
     return result
 end
 
-function add(mr::MontgomeryReducer, x::Unsigned, y::Unsigned)
+function add(mr::MontReducer, x::Unsigned, y::Unsigned)
     return x + y < mr.modulus ? x + y : x + y - mr.modulus
 end
 
-function sub(mr::MontgomeryReducer, x::Unsigned, y::Unsigned)
+function sub(mr::MontReducer, x::Unsigned, y::Unsigned)
     return y > x ? mr.modulus - (y - x) : x - y
 end
 
-function pow(mr::MontgomeryReducer, x::Unsigned, p::Unsigned)
+function pow(mr::MontReducer, x::Unsigned, p::Unsigned)
     z = mr.convertedone
 
     while p != 0
@@ -312,7 +312,7 @@ function pow(mr::MontgomeryReducer, x::Unsigned, p::Unsigned)
 end
 
 # Debug version
-# struct MontgomeryReducer{T<:Unsigned}
+# struct MontReducer{T<:Unsigned}
 #     modulus::T
 #     rbits::Int
 #     r::T
@@ -321,7 +321,7 @@ end
 #     k::T
 #     convertedone::T
 
-#     function MontgomeryReducer(n::Unsigned)
+#     function MontReducer(n::Unsigned)
 #         rbits = (ndigits(n, base = 2) ÷ 8 + 1) * 8
 #         T = get_uint_type(Base._nextpow2(2 * rbits))
 #         modulus = T(n)
@@ -337,15 +337,15 @@ end
 #     end
 # end
 
-# function convert_in(mr::MontgomeryReducer, x::Unsigned)
+# function convert_in(mr::MontReducer, x::Unsigned)
 #     return mod(typeof(mr.modulus)(x) << mr.rbits, mr.modulus) 
 # end
 
-# function convert_out(mr::MontgomeryReducer, x::Unsigned)
+# function convert_out(mr::MontReducer, x::Unsigned)
 #     return mod(mr.rinv * x, mr.modulus)
 # end
 
-# function mul(mr::MontgomeryReducer, x::Unsigned, y::Unsigned)
+# function mul(mr::MontReducer, x::Unsigned, y::Unsigned)
 #     m = mr.modulus
 
 #     # product = x * y
@@ -369,7 +369,7 @@ end
 #     return result
 # end
 
-# function add(mr::MontgomeryReducer, x::Unsigned, y::Unsigned)
+# function add(mr::MontReducer, x::Unsigned, y::Unsigned)
 #     @assert x <= mr.modulus && y <= mr.modulus
 #     sum, f = Base.add_with_overflow(x, y)
 #     @assert f == false "Overflow in addition: x: $x, y: $y"
@@ -379,12 +379,12 @@ end
 #     return result
 # end
 
-# function sub(mr::MontgomeryReducer, x::Unsigned, y::Unsigned)
+# function sub(mr::MontReducer, x::Unsigned, y::Unsigned)
 #     @assert x <= mr.modulus && y <= mr.modulus
 #     return y > x ? mr.modulus - (y - x) : x - y
 # end
 
-# function pow(mr::MontgomeryReducer, x::Unsigned, p::Unsigned)
+# function pow(mr::MontReducer, x::Unsigned, p::Unsigned)
 #     # p = mod(p, mr.modulus - 1)
 #     z = mr.convertedone
 #     # println(eltype(mr.modulus))

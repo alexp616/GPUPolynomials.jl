@@ -28,7 +28,7 @@ function test_add()
     # println("Starting montgomery addition tests...")
     for _ in 1:1000
         prime = rand(3:2:2^54)
-        mr = MontgomeryReducer(UInt128(prime))
+        mr = MontReducer(UInt128(prime))
         for dfdf in 1:1000
             a = unsigned(rand(1:prime - 1))
             b = unsigned(rand(1:prime - 1))
@@ -50,7 +50,7 @@ function test_sub()
     # println("Starting montgomery subtraction tests...")
     for _ in 1:1000
         prime = rand(3:2:2^54)
-        mr = MontgomeryReducer(UInt128(prime))
+        mr = MontReducer(UInt128(prime))
         for dfdf in 1:1000
             a = unsigned(rand(1:prime - 1))
             b = unsigned(rand(1:prime - 1))
@@ -74,7 +74,7 @@ function test_mul()
     # println("Starting montgomery multiplication tests...")
     for _ in 1:1000
         prime = rand(3:2:2^54)
-        mr = MontgomeryReducer(UInt128(prime))
+        mr = MontReducer(UInt128(prime))
         for dfdf in 1:1000
             a = unsigned(rand(1:prime - 1))
             b = unsigned(rand(1:prime - 1))
@@ -96,7 +96,7 @@ function test_pow()
     # println("Starting montgomery powering tests...")
     for _ in 1:1000
         prime = rand(3:2:2^54)
-        mr = MontgomeryReducer(UInt128(prime))
+        mr = MontReducer(UInt128(prime))
         for dfdf in 1:1000
             a = unsigned(rand(1:prime - 1))
             b = unsigned(rand(1:prime - 1))

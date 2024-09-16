@@ -4,12 +4,12 @@ include("../ntt_utils.jl")
 
 export CPUNTTPregen, CPUINTTPregen, pregen_ntt, pregen_intt, cpu_ntt!, cpu_intt!
 
-mutable struct CPUNTTPregen{}
+mutable struct CPUNTTPregen
     primeArray::Vector{<:Unsigned}
     npruArray::Vector{<:Unsigned}
     len::Int
     log2len::Int
-    butterfly::Vector
+    butterfly::Vector{Int}
 end
 
 mutable struct CPUINTTPregen
@@ -17,27 +17,21 @@ mutable struct CPUINTTPregen
     lenInverseArray::Vector{<:Unsigned}
 end
 
-function pregen_ntt(primeArray::Vector{<:Signed}, len)
-    return pregen_ntt(unsigned(eltype(primeArray)).(primeArray), len)
-end
 
-function pregen_ntt(primeArray::Vector{<:Unsigned}, len)
+function pregen_ntt(primeArray::Vector{<:Integer}, len)
     if !ispow2(len)
         throw(ArgumentError("len must be a power of 2."))
     end
 
+    primeArray = unsigned.(primeArray)
     type = eltype(primeArray)
-
-    primeArray = type.(primeArray)
 
     butterfly = Array(generate_butterfly_permutations(len))
 
     lenInverseArray = type.(map(p -> mod_inverse(len, p), primeArray))
-    # println("lenInverseArray: $(Int.(lenInverseArray))")
     log2len = Int(log2(len))
 
     npruArray = npruarray_generator(primeArray, len)
-    # println("npruArray: $(Int.(npruArray))")
 
     @assert eltype(primeArray) <: Unsigned
     @assert eltype(npruArray) <: Unsigned
@@ -103,7 +97,7 @@ function cpu_intt!(stackedvec::Array{T}, pregen::CPUINTTPregen) where T<:Unsigne
     for i in 1:length(pregen.nttpregen.primeArray)
         stackedvec[:, i] .*= pregen.lenInverseArray[i]
         stackedvec[:, i] .= map(x -> mod(x, pregen.nttpregen.primeArray[i]), stackedvec[:, i])
-    end
-    
+    end 
 end
+
 end
