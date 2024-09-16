@@ -2,7 +2,7 @@ using CUDA
 
 import Base: divrem, mod
 
-@inline function Base.mod(x::Integer, m::Integer)
+@inline function Base.mod(x::Signed, m::Signed)
     q, r = divrem(x, m)
     return r < 0 ? r + m : r
 end
@@ -27,16 +27,11 @@ end
 
 # These two aren't the most efficient, but its just a few ms in
 # pregeneration time who cares
-function get_result_type(primeArray::Vector{<:Integer})
+function get_result_type(primeArray::Vector{<:Unsigned})
     primeArray = BigInt.(primeArray)
     totalprod = prod(primeArray)
-    if eltype(primeArray) <: Signed
-        sizeNeeded = ceil(Int, log2(totalprod + 1) + 1)
-        resultType = get_int_type(Base._nextpow2(sizeNeeded))
-    else
-        sizeNeeded = ceil(Int, log2(totalprod + 1))
-        resultType = get_uint_type(Base._nextpow2(sizeNeeded))
-    end
+    sizeNeeded = ceil(Int, log2(totalprod + 1))
+    resultType = get_uint_type(Base._nextpow2(sizeNeeded))
 
     return resultType
 end
@@ -110,7 +105,6 @@ function Base.divrem(n::UInt128, m::UInt128)
     return quotient, remainder
 end
 
-# Gets really wonky if we just try to pass in unsigned ints
 function extended_gcd_iterative(a::T, b::T) where T<:Signed
     x0, x1 = T(1), T(0)
     y0, y1 = T(0), T(1)
@@ -202,7 +196,7 @@ function nth_principal_root_of_unity(n::Integer, p::Unsigned)
     return typeof(p)(root_of_unity)
 end
 
-function npruarray_generator(primearray::Array{T}, n) where T<:Unsigned
+function npruarray_generator(primearray::Array{<:Unsigned}, n)
     return map(p -> nth_principal_root_of_unity(n, p), primearray)
 end
 
@@ -212,7 +206,7 @@ function parallel_bit_reverse_copy(p)
     result = CUDA.zeros(eltype(p), len)
     log2n = Int(log2(len))
 
-    function kernel(p, dest, len, log2n)
+    function kern(p, dest, len, log2n)
         idx1 = threadIdx().x + (blockIdx().x - 1) * blockDim().x - 1
         idx2 = idx1 + Int(len / 2)
     
@@ -224,7 +218,7 @@ function parallel_bit_reverse_copy(p)
         return nothing
     end
 
-    kernel = @cuda launch = false kernel(p, result, len, log2n)
+    kernel = @cuda launch = false kern(p, result, len, log2n)
     config = launch_configuration(kernel.fun)
     threads = min(len ÷ 2, prevpow(2, config.threads))
     blocks = cld(len ÷ 2, threads)
@@ -249,3 +243,158 @@ function generate_butterfly_permutations(n::Int)::CuVector
     perm = parallel_bit_reverse_copy(CuArray([i for i in 1:n]))
     return perm
 end
+
+# MONTGOMERY REDUCTION
+
+struct MontgomeryReducer{T<:Unsigned}
+    modulus::T
+    rbits::Int
+    r::T
+    mask::T
+    rinv::T
+    k::T
+    convertedone::T
+
+    function MontgomeryReducer(n::Unsigned)
+        rbits = (ndigits(n, base = 2) ÷ 8 + 1) * 8
+        T = get_uint_type(Base._nextpow2(2 * rbits))
+        modulus = T(n)
+        r = T(1) << rbits
+        mask = r - 1
+        @assert r > n && gcd(r, n) == 1
+        
+        rinv = T((mod_inverse(r, n)))
+        k = (r * rinv - 1) ÷ n
+        convertedone = T(mod(r, n))
+
+        return new{T}(modulus, rbits, r, mask, rinv, k, convertedone)
+    end
+end
+
+function convert_in(mr::MontgomeryReducer, x::Unsigned)
+    return mod(typeof(mr.modulus)(x) << mr.rbits, mr.modulus) 
+end
+
+function convert_out(mr::MontgomeryReducer, x::Unsigned)
+    return mod(mr.rinv * x, mr.modulus)
+end
+
+function mul(mr::MontgomeryReducer, x::Unsigned, y::Unsigned)
+    m = mr.modulus
+    product = x * y
+    temp = ((product & mr.mask) * mr.k) & mr.mask
+    reduced = (product + temp * m) >> mr.rbits
+    result = reduced < m ? reduced : reduced - m
+
+    return result
+end
+
+function add(mr::MontgomeryReducer, x::Unsigned, y::Unsigned)
+    return x + y < mr.modulus ? x + y : x + y - mr.modulus
+end
+
+function sub(mr::MontgomeryReducer, x::Unsigned, y::Unsigned)
+    return y > x ? mr.modulus - (y - x) : x - y
+end
+
+function pow(mr::MontgomeryReducer, x::Unsigned, p::Unsigned)
+    z = mr.convertedone
+
+    while p != 0
+        if p & 1 != 0
+            z = mul(mr, z, x)
+        end
+        x = mul(mr, x, x)
+        p >>= 1
+    end
+    
+    return z
+end
+
+# Debug version
+# struct MontgomeryReducer{T<:Unsigned}
+#     modulus::T
+#     rbits::Int
+#     r::T
+#     mask::T
+#     rinv::T
+#     k::T
+#     convertedone::T
+
+#     function MontgomeryReducer(n::Unsigned)
+#         rbits = (ndigits(n, base = 2) ÷ 8 + 1) * 8
+#         T = get_uint_type(Base._nextpow2(2 * rbits))
+#         modulus = T(n)
+#         r = T(1) << rbits
+#         mask = r - 1
+#         @assert r > n && gcd(r, n) == 1
+        
+#         rinv = T((mod_inverse(r, n)))
+#         k = (r * rinv - 1) ÷ n
+#         convertedone = T(mod(r, n))
+
+#         return new{T}(modulus, rbits, r, mask, rinv, k, convertedone)
+#     end
+# end
+
+# function convert_in(mr::MontgomeryReducer, x::Unsigned)
+#     return mod(typeof(mr.modulus)(x) << mr.rbits, mr.modulus) 
+# end
+
+# function convert_out(mr::MontgomeryReducer, x::Unsigned)
+#     return mod(mr.rinv * x, mr.modulus)
+# end
+
+# function mul(mr::MontgomeryReducer, x::Unsigned, y::Unsigned)
+#     m = mr.modulus
+
+#     # product = x * y
+#     product, f = Base.mul_with_overflow(x, y)
+#     @assert f == false "x: $x, y: $y"
+
+#     # temp = ((product & mr.mask) * mr.k) & mr.mask
+#     temp, f = Base.mul_with_overflow((product & mr.mask), mr.k)
+#     temp &= mr.mask
+#     @assert f == false "product & mr.mask: $(product & mr.mask), mr.k: $(mr.k)"
+
+#     # reduced = (product + temp * m) >> mr.rbits
+#     asdf, f = Base.mul_with_overflow(temp, m)
+#     @assert f == false "temp: $temp, m: $m"
+#     reduced, f = Base.add_with_overflow(product, asdf)
+#     reduced >>= mr.rbits
+#     # println("log2(product): $(log2(product)), log2(asdf): $(log2(asdf))")
+#     @assert f == false "product: $product, asdf: $asdf"
+
+#     result = reduced < m ? reduced : reduced - m
+#     return result
+# end
+
+# function add(mr::MontgomeryReducer, x::Unsigned, y::Unsigned)
+#     @assert x <= mr.modulus && y <= mr.modulus
+#     sum, f = Base.add_with_overflow(x, y)
+#     @assert f == false "Overflow in addition: x: $x, y: $y"
+
+#     # If the sum is greater than or equal to the modulus, reduce it
+#     result = sum < mr.modulus ? sum : sum - mr.modulus
+#     return result
+# end
+
+# function sub(mr::MontgomeryReducer, x::Unsigned, y::Unsigned)
+#     @assert x <= mr.modulus && y <= mr.modulus
+#     return y > x ? mr.modulus - (y - x) : x - y
+# end
+
+# function pow(mr::MontgomeryReducer, x::Unsigned, p::Unsigned)
+#     # p = mod(p, mr.modulus - 1)
+#     z = mr.convertedone
+#     # println(eltype(mr.modulus))
+#     while p != 0
+#         if p & 1 != 0
+#             z = mul(mr, z, x)
+#         end
+#         x = mul(mr, x, x)
+#         p >>= 1
+#     end
+
+#     return z
+# end
