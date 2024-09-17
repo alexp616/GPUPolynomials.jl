@@ -7,6 +7,18 @@ import Base: divrem, mod
     return r < 0 ? r + m : r
 end
 
+@inline function sub_mod(x::Signed, y::Signed, m::Signed)
+    return mod(x - y, m)
+end
+
+@inline function sub_mod(x::Unsigned, y::Unsigned, m::Unsigned)
+    if y > x
+        return m - mod(y - x, m)
+    else
+        return mod(x - y, m)
+    end
+end
+
 function crt(vec, pregen)
     x = vec[1]
 
@@ -25,23 +37,11 @@ function get_uint_type(n)
     return eval(Symbol("UInt", n))
 end
 
-# These two aren't the most efficient, but its just a few ms in
-# pregeneration time who cares
-function get_result_type(primeArray::Vector{<:Unsigned})
+function pregen_crt(primeArray::Vector{T}) where T<:Integer
+    # There really shouldn't be any overflow behavior, but 
+    # I'm doing it in BigInt just to be safe. This is all for
+    # the pregeneration step anyways.
     primeArray = BigInt.(primeArray)
-    totalprod = prod(primeArray)
-    sizeNeeded = ceil(Int, log2(totalprod + 1))
-    resultType = get_uint_type(Base._nextpow2(sizeNeeded))
-
-    return resultType
-end
-
-function pregen_crt(primeArray::Vector{<:Integer})
-    primeArray = BigInt.(primeArray)
-    totalprod = prod(primeArray)
-    biggestnumneeded = totalprod^2
-    sizeNeeded = ceil(Int, log2(biggestnumneeded + 1))
-    crtType = get_uint_type(Base._nextpow2(sizeNeeded))
 
     result = zeros(BigInt, 3, length(primeArray) - 1)
 
@@ -55,8 +55,7 @@ function pregen_crt(primeArray::Vector{<:Integer})
     end
 
     @assert all([i > 0 for i in result])
-    @assert all(i -> log2(i) < sizeNeeded, result)
-    return crtType.(result)
+    return T.(result)
 end
 
 function Base.divrem(n::Int128, m::Int128)
@@ -173,7 +172,7 @@ function mod_inverse(n::Integer, p::Integer)
 end
 
 
-function nth_principal_root_of_unity(n::Integer, p::Unsigned)
+function nth_principal_root_of_unity(n::Integer, p::Integer)
     @assert mod(p - 1, n) == 0 "n must divide p-1"
 
     order = (p - 1) ÷ n
@@ -196,7 +195,7 @@ function nth_principal_root_of_unity(n::Integer, p::Unsigned)
     return typeof(p)(root_of_unity)
 end
 
-function npruarray_generator(primearray::Array{<:Unsigned}, n)
+function npruarray_generator(primearray::Array{<:Integer}, n)
     return map(p -> nth_principal_root_of_unity(n, p), primearray)
 end
 
@@ -255,7 +254,8 @@ struct MontReducer{T<:Unsigned}
     k::T
     convertedone::T
 
-    function MontReducer(n::Unsigned)
+    function MontReducer(n::Integer)
+        n = unsigned(n)
         rbits = (ndigits(n, base = 2) ÷ 8 + 1) * 8
         T = get_uint_type(Base._nextpow2(2 * rbits))
         modulus = T(n)

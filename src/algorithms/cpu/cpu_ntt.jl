@@ -4,56 +4,49 @@ include("../ntt_utils.jl")
 
 export CPUNTTPregen, CPUINTTPregen, pregen_ntt, pregen_intt, cpu_ntt!, cpu_intt!
 
-mutable struct CPUNTTPregen
-    primeArray::Vector{<:Unsigned}
-    npruArray::Vector{<:Unsigned}
+mutable struct CPUNTTPregen{T<:Integer}
+    primeArray::Vector{T}
+    npruArray::Vector{T}
     len::Int
     log2len::Int
     butterfly::Vector{Int}
 end
 
-mutable struct CPUINTTPregen
-    nttpregen::CPUNTTPregen
-    lenInverseArray::Vector{<:Unsigned}
+mutable struct CPUINTTPregen{T<:Integer}
+    nttpregen::CPUNTTPregen{T}
+    lenInverseArray::Vector{T}
 end
-
 
 function pregen_ntt(primeArray::Vector{<:Integer}, len)
     if !ispow2(len)
         throw(ArgumentError("len must be a power of 2."))
     end
 
-    primeArray = unsigned.(primeArray)
-    type = eltype(primeArray)
-
     butterfly = Array(generate_butterfly_permutations(len))
 
-    lenInverseArray = type.(map(p -> mod_inverse(len, p), primeArray))
+    lenInverseArray = map(p -> mod_inverse(len, p), primeArray)
+    @assert all([i > 0 for i in lenInverseArray])
     log2len = Int(log2(len))
 
     npruArray = npruarray_generator(primeArray, len)
+    @assert all([i > 0 for i in npruArray])
+    nttpregen = CPUNTTPregen{eltype(primeArray)}(primeArray, npruArray, len, log2len, butterfly)
 
-    @assert eltype(primeArray) <: Unsigned
-    @assert eltype(npruArray) <: Unsigned
+    npruInverseArray = mod_inverse.(npruArray, primeArray)
+    @assert all([i > 0 for i in npruInverseArray])
 
-    nttpregen = CPUNTTPregen(primeArray, npruArray, len, log2len, butterfly)
-
-    npruInverseArray = type.(mod_inverse.(npruArray, primeArray))
-
-    @assert eltype(npruInverseArray) <: Unsigned
-
-    temp = CPUNTTPregen(primeArray, npruInverseArray, len, log2len, butterfly)
-    inttpregen = CPUINTTPregen(temp, lenInverseArray)
+    temp = CPUNTTPregen{eltype(primeArray)}(primeArray, npruInverseArray, len, log2len, butterfly)
+    inttpregen = CPUINTTPregen{eltype(primeArray)}(temp, lenInverseArray)
 
     return nttpregen, inttpregen
 end
 
-function pregen_intt(nttpregen::CPUNTTPregen)
+function pregen_intt(nttpregen::CPUNTTPregen{T}) where T<:Integer
     lenInverseArray = map(p -> mod(nttpregen.len, p), nttpregen.primeArray)
-    return CPUINTTPregen(nttpregen, lenInverseArray)
+    return CPUINTTPregen{T}(nttpregen, lenInverseArray)
 end
 
-function cpu_ntt!(stackedvec::Array{<:Unsigned}, pregen::CPUNTTPregen)
+function cpu_ntt!(stackedvec::Array{T}, pregen::CPUNTTPregen{T}) where T<:Integer
     if size(stackedvec, 1) != pregen.len
         throw(ArgumentError("Vector doesn't have same length as pregen object. Vector length: $(size(stackedvec, 1)), pregen.len: $(pregen.len)"))
     end
@@ -75,20 +68,14 @@ function cpu_ntt!(stackedvec::Array{<:Unsigned}, pregen::CPUNTTPregen)
                 t = theta * stackedvec[k + m2 + 1, p]
                 u = stackedvec[k + 1, p]
 
-                if t > u
-                    a = pregen.primeArray[p] - mod(t - u, pregen.primeArray[p])
-                else
-                    a = mod(u - t, pregen.primeArray[p])
-                end
-
                 stackedvec[k + 1, p] = mod(u + t, pregen.primeArray[p])
-                stackedvec[k + m2 + 1, p] = mod(a, pregen.primeArray[p])
+                stackedvec[k + m2 + 1, p] = sub_mod(u, t, pregen.primeArray[p])
             end
         end
     end
 end
 
-function cpu_intt!(stackedvec::Array{T}, pregen::CPUINTTPregen) where T<:Unsigned
+function cpu_intt!(stackedvec::Array{T}, pregen::CPUINTTPregen{T}) where T<:Integer
     if size(stackedvec, 1) != pregen.nttpregen.len
         throw(ArgumentError("Vector doesn't have same length as pregen object."))
     end

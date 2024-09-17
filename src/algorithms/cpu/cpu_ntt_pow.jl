@@ -20,15 +20,33 @@ function get_fft_size(vec, pow)
     return Base._nextpow2(finalLength)
 end
 
+function get_types(primeArray::Vector{<:Unsigned})
+    max = BigInt(maximum(primeArray))
+    nttType = get_uint_type(Base._nextpow2(Int(ceil(log2(max^2 + 1)))))
+
+    totalprod = prod(BigInt.(primeArray))
+    crtType = get_uint_type(Base._nextpow2(Int(ceil(log2(totalprod^2 + 1)))))
+    resultType = get_uint_type(Base._nextpow2(Int(ceil(log2(totalprod + 1)))))
+    
+    return nttType, resultType, crtType
+end
+
+function get_types(primeArray::Vector{<:Signed})
+    max = BigInt(maximum(primeArray))
+    nttType = get_int_type(Base._nextpow2(1 + Int(ceil(log2(max^2 + 1)))))
+
+    totalprod = prod(BigInt.(primeArray))
+    crtType = get_int_type(Base._nextpow2(1 + Int(ceil(log2(totalprod^2 + 1)))))
+    resultType = get_int_type(Base._nextpow2(1 + Int(ceil(log2(totalprod + 1)))))
+
+    return nttType, crtType, resultType
+end
+
 function pregen_cpu_pow(primeArray::Vector{T}, fftSize) where T<:Integer
-    primeArray = unsigned(eltype(primeArray)).(primeArray)
     pregentime = @timed begin
-        nttpregen, inttpregen = pregen_ntt(primeArray, fftSize)
-        pregencrttime = @timed begin
-            crtpregen = pregen_crt(primeArray)
-            resultType = get_result_type(primeArray)
-        end
-        println("CRT Pregen took $(pregencrttime.time) s")
+        nttType, crtType, resultType = get_types(primeArray)
+        nttpregen, inttpregen = pregen_ntt(nttType.(primeArray), fftSize)
+        crtpregen = pregen_crt(crtType.(primeArray))
     end
     println("Entire pregeneration took $(pregentime.time) s")
 
@@ -38,7 +56,6 @@ end
 function cpu_ntt_pow(vec::Vector{<:Integer}, pow::Int; pregen::Union{CPUPowPregen, Nothing} = nothing, docrt = true)
     finalLength = (length(vec) - 1) * pow + 1
 
-    @assert eltype(pregen.primeArray) <: Unsigned
     if eltype(vec) != eltype(pregen.primeArray)
         println("Casting vec to primeArray type...")
         vec = eltype(pregen.primeArray).(vec)
@@ -55,10 +72,12 @@ function cpu_ntt_pow(vec::Vector{<:Integer}, pow::Int; pregen::Union{CPUPowPrege
     broadcast_pow!(multimodvec, pregen.primeArray, pow)
     cpu_intt!(multimodvec, pregen.inttpregen)
 
-    if length(pregen.primeArray) > 1 && docrt
-        return build_result(multimodvec, pregen.crtpregen, finalLength, resultType)
+    if length(pregen.primeArray) == 1
+        return pregen.resultType.(multimodvec)[1:finalLength]
+    elseif docrt
+        return build_result(multimodvec, pregen.crtpregen, finalLength, pregen.resultType)
     else
-        return multimodvec[1:finalLength]
+        return eltype(pregen.crtpregen).(multimodvec[1:finalLength])
     end
 end
 
