@@ -2,7 +2,7 @@ include("cpu_ntt.jl")
 
 module CPUNTTPow
 
-include("../ntt_utils.jl")
+include("../../utils/ntt_utils.jl")
 using ..CPUNTT
 
 export CPUPowPregen, get_fft_size, pregen_cpu_pow, cpu_ntt_pow

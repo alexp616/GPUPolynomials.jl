@@ -2,7 +2,7 @@ include("gpu_ntt.jl")
 
 module GPUNTTPow
 
-include("../ntt_utils.jl")
+include("../../utils/ntt_utils.jl")
 using ..GPUNTT
 
 export GPUPowPregen, get_fft_size, pregen_gpu_pow, gpu_ntt_pow

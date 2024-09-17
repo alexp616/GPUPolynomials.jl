@@ -1,6 +1,6 @@
 module CPUMontgomeryNTT
 
-include("../montgomery_reduction.jl")
+include("../../utils/montgomery_reduction.jl")
 
 mutable struct CPUMontNTTPregen
     montPrimeArray::Vector{MontReducer}

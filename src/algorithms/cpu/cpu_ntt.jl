@@ -1,6 +1,6 @@
 module CPUNTT
 
-include("../ntt_utils.jl")
+include("../../utils/ntt_utils.jl")
 
 export CPUNTTPregen, CPUINTTPregen, pregen_ntt, pregen_intt, cpu_ntt!, cpu_intt!
 

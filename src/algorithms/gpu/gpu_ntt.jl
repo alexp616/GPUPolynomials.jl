@@ -2,7 +2,7 @@ module GPUNTT
 
 using CUDA
 
-include("../ntt_utils.jl")
+include("../../utils/ntt_utils.jl")
 
 export GPUNTTPregen, GPUINTTPregen, pregen_ntt, pregen_intt, gpu_ntt!, gpu_intt!
 
