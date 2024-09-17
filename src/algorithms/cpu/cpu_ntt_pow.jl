@@ -7,17 +7,12 @@ using ..CPUNTT
 
 export CPUPowPregen, get_fft_size, pregen_cpu_pow, cpu_ntt_pow
 
-mutable struct CPUPowPregen
-    primeArray::Vector{<:Integer}
-    nttpregen::CPUNTTPregen
-    inttpregen::CPUINTTPregen
+mutable struct CPUPowPregen{T<:Integer}
+    primeArray::Vector{T}
+    nttpregen::CPUNTTPregen{T}
+    inttpregen::CPUINTTPregen{T}
     crtpregen::Array{<:Integer}
     resultType::DataType
-end
-
-function get_fft_size(vec, pow)
-    finalLength = (length(vec) - 1) * pow + 1
-    return Base._nextpow2(finalLength)
 end
 
 function get_types(primeArray::Vector{<:Unsigned})
@@ -48,25 +43,27 @@ function pregen_cpu_pow(primeArray::Vector{T}, fftSize) where T<:Integer
         nttpregen, inttpregen = pregen_ntt(nttType.(primeArray), fftSize)
         crtpregen = pregen_crt(crtType.(primeArray))
     end
-    println("Entire pregeneration took $(pregentime.time) s")
+    # println("Entire pregeneration took $(pregentime.time) s")
 
-    return CPUPowPregen(primeArray, nttpregen, inttpregen, crtpregen, resultType)
+    return CPUPowPregen{nttType}(nttType.(primeArray), nttpregen, inttpregen, crtpregen, resultType)
 end
 
 function cpu_ntt_pow(vec::Vector{<:Integer}, pow::Int; pregen::Union{CPUPowPregen, Nothing} = nothing, docrt = true)
     finalLength = (length(vec) - 1) * pow + 1
 
-    if eltype(vec) != eltype(pregen.primeArray)
-        println("Casting vec to primeArray type...")
-        vec = eltype(pregen.primeArray).(vec)
+    if eltype(vec) != eltype(pregen.nttpregen.primeArray)
+        println("Casting vec ($(eltype(vec))) to pregenerated ntt type ($(eltype(pregen.nttpregen.primeArray)))...")
+        vec = eltype(pregen.nttpregen.primeArray).(vec)
     end
 
     if pregen === nothing
         throw(ArgumentError("Default pregeneration has not been implemented yet."))
     end
 
+    # println("eltype(vec): $(eltype(vec))")
     multimodvec = repeat(vcat(vec, zeros(eltype(vec), pregen.nttpregen.len - length(vec))), 1, length(pregen.primeArray))
 
+    # println("typeof(multimodvec): $(typeof(multimodvec)), typeof(pregen.nttpregen): $(typeof(pregen.nttpregen))")
     cpu_ntt!(multimodvec, pregen.nttpregen)
 
     broadcast_pow!(multimodvec, pregen.primeArray, pow)
@@ -88,7 +85,7 @@ function build_result(multimodvec, crtpregen, finalLength, resultType)::Vector
         if multimodvec[row, :] == zerovec
             result[row] = 0
         else
-            result[row] = crt(view(multimodvec, row, :), crtPregen)
+            result[row] = crt(view(multimodvec, row, :), crtpregen)
         end
     end
 
