@@ -35,19 +35,19 @@ function pregen_ntt(primeArray::Vector{<:Integer}, len)
     @assert all([i > 0 for i in thetaArray])
     nttpregen = CPUNTTPregen{eltype(primeArray)}(primeArray, npruArray, thetaArray, len, log2len, butterfly)
 
-    npruInverseArray = mod_inverse.(npruArray, primeArray)
+    npruInverseArray = eltype(primeArray).(mod_inverse.(npruArray, primeArray))
     @assert all([i > 0 for i in npruInverseArray])
 
     inverseThetaArray = generate_theta_m(primeArray, len, log2len, npruInverseArray)
     @assert all([i > 0 for i in npruInverseArray])
     temp = CPUNTTPregen{eltype(primeArray)}(primeArray, npruInverseArray, inverseThetaArray, len, log2len, butterfly)
-    inttpregen = CPUINTTPregen{eltype(primeArray)}(temp, lenInverseArray)
+    inttpregen = pregen_intt(temp)
 
     return nttpregen, inttpregen
 end
 
 function pregen_intt(nttpregen::CPUNTTPregen{T}) where T<:Integer
-    lenInverseArray = map(p -> mod(nttpregen.len, p), nttpregen.primeArray)
+    lenInverseArray = T.(map(p -> mod_inverse(nttpregen.len, p), nttpregen.primeArray))
     return CPUINTTPregen{T}(nttpregen, lenInverseArray)
 end
 
@@ -71,15 +71,18 @@ function cpu_ntt!(stackedvec::Array{T}, pregen::CPUNTTPregen{T}) where T<:Intege
     for i in 1:pregen.log2len
         m = 1 << i
         m2 = m >> 1
-        magic = 1 << (pregen.log2len - i)
+        magicbits = pregen.log2len - i
+        magicmask = (1 << magicbits) - 1
+        
         # theta_m = power_mod.(pregen.npruArray, pregen.len ÷ m, pregen.primeArray)
         theta_m = view(pregen.thetaArray, :, i)
         for idx in 0:lenover2 - 1
-            k = m * mod(idx, magic) + idx ÷ magic
-            # k = Int(2 * m2 * (idx % magic) + floor(idx/magic))
-            # println("k + 1: $(k + 1), k + m2 + 1: $(k + m2 + 1)")
+            # k = m * mod(idx, magic) + idx ÷ magic
+            k = m * (idx & magicmask) + (idx >> magicbits)
+
             for p in eachindex(pregen.primeArray)
-                theta = power_mod(theta_m[p], idx ÷ magic, pregen.primeArray[p])
+                # theta = power_mod(theta_m[p], idx ÷ magic, pregen.primeArray[p])
+                theta = power_mod(theta_m[p], idx >> magicbits, pregen.primeArray[p])
                 t = theta * stackedvec[k + m2 + 1, p]
                 u = stackedvec[k + 1, p]
 

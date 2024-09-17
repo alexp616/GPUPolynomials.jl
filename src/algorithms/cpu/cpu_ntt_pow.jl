@@ -15,29 +15,7 @@ mutable struct CPUPowPregen{T<:Integer}
     resultType::DataType
 end
 
-function get_types(primeArray::Vector{<:Unsigned})
-    max = BigInt(maximum(primeArray))
-    nttType = get_uint_type(Base._nextpow2(Int(ceil(log2(max^2 + 1)))))
-
-    totalprod = prod(BigInt.(primeArray))
-    crtType = get_uint_type(Base._nextpow2(Int(ceil(log2(totalprod^2 + 1)))))
-    resultType = get_uint_type(Base._nextpow2(Int(ceil(log2(totalprod + 1)))))
-    
-    return nttType, resultType, crtType
-end
-
-function get_types(primeArray::Vector{<:Signed})
-    max = BigInt(maximum(primeArray))
-    nttType = get_int_type(Base._nextpow2(1 + Int(ceil(log2(max^2 + 1)))))
-
-    totalprod = prod(BigInt.(primeArray))
-    crtType = get_int_type(Base._nextpow2(1 + Int(ceil(log2(totalprod^2 + 1)))))
-    resultType = get_int_type(Base._nextpow2(1 + Int(ceil(log2(totalprod + 1)))))
-
-    return nttType, crtType, resultType
-end
-
-function pregen_cpu_pow(primeArray::Vector{T}, fftSize) where T<:Integer
+function pregen_cpu_pow(primeArray::Vector{<:Integer}, fftSize)
     pregentime = @timed begin
         nttType, crtType, resultType = get_types(primeArray)
         nttpregen, inttpregen = pregen_ntt(nttType.(primeArray), fftSize)
@@ -51,13 +29,13 @@ end
 function cpu_ntt_pow(vec::Vector{<:Integer}, pow::Int; pregen::Union{CPUPowPregen, Nothing} = nothing, docrt = true)
     finalLength = (length(vec) - 1) * pow + 1
 
+    if pregen === nothing
+        throw(ArgumentError("Default pregeneration has not been implemented yet."))
+    end
+
     if eltype(vec) != eltype(pregen.nttpregen.primeArray)
         println("Casting vec ($(eltype(vec))) to pregenerated ntt type ($(eltype(pregen.nttpregen.primeArray)))...")
         vec = eltype(pregen.nttpregen.primeArray).(vec)
-    end
-
-    if pregen === nothing
-        throw(ArgumentError("Default pregeneration has not been implemented yet."))
     end
 
     # println("eltype(vec): $(eltype(vec))")
@@ -78,6 +56,19 @@ function cpu_ntt_pow(vec::Vector{<:Integer}, pow::Int; pregen::Union{CPUPowPrege
     end
 end
 
+function broadcast_pow!(multimodvec, primeArray, pow)
+    @inbounds begin
+        for p in axes(multimodvec, 2)
+            prime = primeArray[p]
+            for i in axes(multimodvec, 1)
+                multimodvec[i, p] = power_mod(multimodvec[i, p], pow, prime)
+            end
+        end
+    end
+
+    return nothing
+end
+
 function build_result(multimodvec, crtpregen, finalLength, resultType)::Vector
     result = zeros(eltype(crtpregen), finalLength)
     zerovec = zeros(eltype(multimodvec), size(multimodvec, 2))
@@ -90,19 +81,6 @@ function build_result(multimodvec, crtpregen, finalLength, resultType)::Vector
     end
 
     return resultType.(result)
-end
-
-function broadcast_pow!(multimodvec, primeArray, pow)
-    @inbounds begin
-        for p in axes(multimodvec, 2)
-            prime = primeArray[p]
-            for i in axes(multimodvec, 1)
-                multimodvec[i, p] = power_mod(multimodvec[i, p], pow, prime)
-            end
-        end
-    end
-
-    return nothing
 end
 
 end

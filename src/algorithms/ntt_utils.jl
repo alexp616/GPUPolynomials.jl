@@ -9,6 +9,11 @@ import Base: divrem, mod
     return r < 0 ? r + m : r
 end
 
+@inline function Base.mod(x::UInt128, m::UInt128)
+    q, r = divrem(x, m)
+    return r
+end
+
 @inline function sub_mod(x::Signed, y::Signed, m::Signed)
     return mod(x - y, m)
 end
@@ -21,8 +26,54 @@ end
     end
 end
 
+function Base.divrem(n::Int128, m::Int128)::Int128
+    if n == 0
+        return Int128(0)
+    end
+
+    sign = 1
+    if (n < 0) != (m < 0)
+        sign = -1
+    end
+
+    n = abs(n)
+    m = abs(m)
+
+    quotient = Int128(0)
+    remainder = Int128(0)
+
+    for i in 0:127
+        remainder = (remainder << 1) | ((n >> (127 - i)) & 1)
+        if remainder >= m
+            remainder -= m
+            quotient |= (Int128(1) << (127 - i))
+        end
+    end
+
+    return quotient * sign, remainder
+end
+
+function Base.divrem(n::UInt128, m::UInt128)::UInt128
+    if n == 0
+        return UInt128(0)
+    end
+
+    quotient = UInt128(0)
+    remainder = UInt128(0)
+
+    for i in 0:127
+        remainder = (remainder << 1) | ((n >> (127 - i)) & 1)
+        if remainder >= m
+            remainder -= m
+            quotient |= (UInt128(1) << (127 - i))
+        end
+    end
+
+    return quotient, remainder
+end
+
 function crt(vec, pregen)
-    x = vec[1]
+    x = eltype(pregen)(vec[1])
 
     for i in axes(pregen, 2)
         x = mod(x * pregen[2, i] + vec[i + 1] * pregen[1, i], pregen[3, i])
@@ -270,4 +321,26 @@ function find_ntt_primes(n)
     end
 
     return prime_list
+end
+
+function get_types(primeArray::Vector{<:Unsigned})
+    max = BigInt(maximum(primeArray))
+    nttType = get_uint_type(Base._nextpow2(Int(ceil(log2(max^2 + 1)))))
+
+    totalprod = prod(BigInt.(primeArray))
+    crtType = get_uint_type(Base._nextpow2(Int(ceil(log2(totalprod^2 + 1)))))
+    resultType = get_uint_type(Base._nextpow2(Int(ceil(log2(totalprod + 1)))))
+    
+    return nttType, crtType, resultType
+end
+
+function get_types(primeArray::Vector{<:Signed})
+    max = BigInt(maximum(primeArray))
+    nttType = get_int_type(Base._nextpow2(1 + Int(ceil(log2(max^2 + 1)))))
+
+    totalprod = prod(BigInt.(primeArray))
+    crtType = get_int_type(Base._nextpow2(1 + Int(ceil(log2(totalprod^2 + 1)))))
+    resultType = get_int_type(Base._nextpow2(1 + Int(ceil(log2(totalprod + 1)))))
+
+    return nttType, crtType, resultType
 end
