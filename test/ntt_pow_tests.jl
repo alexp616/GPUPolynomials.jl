@@ -12,6 +12,7 @@ using ..GPUNTTPow
 function run_tests()
     test_cpu_ntt_pow()
     test_gpu_ntt_pow()
+    test_ntt_pow()
 end
 
 function test_cpu_ntt_pow()
@@ -66,8 +67,20 @@ function test_gpu_ntt_pow()
     @test result1 == result2
 end
 
+function test_ntt_pow()
+    vec = rand(1:10, 100)
+    cuvec = CuArray(vec)
+
+    pregen1 = CPUNTTPow.pregen_cpu_pow(UInt.([4294957057]), CPUNTTPow.get_fft_size(vec, 3))
+    pregen2 = GPUNTTPow.pregen_gpu_pow(UInt.([7681, 10753, 11777]), GPUNTTPow.get_fft_size(cuvec, 3))
+
+    result1 = CPUNTTPow.cpu_ntt_pow(vec, 3; pregen = pregen1)
+    result2 = GPUNTTPow.gpu_ntt_pow(cuvec, 3; pregen = pregen2)
+    
+    @test result1 == Array(result2)
 end
 
+end
 using .NTTPowTests
 
 NTTPowTests.run_tests()
