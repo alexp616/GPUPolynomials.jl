@@ -1,7 +1,7 @@
 name = "GPUPolynomials"
 uuid = "28b7e69e-4575-4c23-a21a-e8539a711637"
 authors = ["Alex Pan, Jack Garzella"]
-version = "1.0.0-DEV"
+version = "1.0.0"
 
 [deps]
 BitIntegers = "c3b6d118-76ef-56ca-8cc7-ebb389d030a1"
@@ -12,13 +12,6 @@ Oscar = "f1435218-dba5-11e9-1e4d-f1a5fab5fc13"
 Primes = "27ebfcd6-29c5-5fa9-bf4b-fb8fc14df3ae"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
-
-[compat]
-Combinatorics = "1.0.2"
-Dates = "1.11.0"
-Primes = "0.5.6"
-Test = "1.11.0"
-julia = "1.11.0 - 1.11"
 
 [extras]
 CUDA_Runtime_jll = "76a88914-d11a-5bdc-97e0-2f5a05c973a2"
