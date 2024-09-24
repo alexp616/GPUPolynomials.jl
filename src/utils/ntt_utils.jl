@@ -3,6 +3,8 @@ using Primes
 using Dates
 using BitIntegers
 
+import Base: mod, div
+
 function Base.mod(x::UInt128, m::UInt128)
     if x == 0
         return UInt128(0)
