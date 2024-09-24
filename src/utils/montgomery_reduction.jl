@@ -18,14 +18,14 @@ struct MontReducer{T<:Unsigned}
         mask = r - 1
         @assert r > n && gcd(r, n) == 1
         
-        rinv = T((mod_inverse(r, n)))
+        rinv = T(mod_inverse(r, n))
         k = (r * rinv - 1) ÷ n
         convertedone = T(mod(r, n))
 
         return new{T}(modulus, rbits, r, mask, rinv, k, convertedone)
     end
 
-    function MontReducer(n::Integer, T<:Unsigned)
+    function MontReducer(n::Integer, T::Type{<:Unsigned})
         n = T(n)
         rbits = (ndigits(n, base = 2) ÷ 8 + 1) * 8
         modulus = T(n)
@@ -33,13 +33,14 @@ struct MontReducer{T<:Unsigned}
         mask = r - 1
         @assert r > n && gcd(r, n) == 1
 
-        rinv = T((mod_inverse(r, n)))
-        k = (r * inv - 1) ÷ n
+        rinv = T(mod_inverse(r, n))
+        k = (r * rinv - 1) ÷ n
         convertedone = T(mod(r, n))
 
         return new{T}(modulus, rbits, r, mask, rinv, k, convertedone)
     end
 end
+
 
 function convert_in(mr::MontReducer, x::Unsigned)
     return mod(typeof(mr.modulus)(x) << mr.rbits, mr.modulus) 

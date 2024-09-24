@@ -1,20 +1,94 @@
 using CUDA
 using Primes
 using Dates
+using BitIntegers
 
-import Base: divrem, mod
+function Base.mod(x::UInt128, m::UInt128)
+    if x == 0
+        return UInt128(0)
+    end
 
-include("UInt256.jl")
-using ..UInt256Module
+    remainder = UInt128(0)
 
-@inline function Base.mod(x::Signed, m::Signed)
-    q, r = divrem(x, m)
-    return r < 0 ? r + m : r
+    for i in 0:127
+        remainder = (remainder << 1) | ((x >> (127 - i)) & 1)
+        if remainder >= m
+            remainder -= m
+        end
+    end
+
+    return remainder
 end
 
-@inline function Base.mod(x::UInt128, m::UInt128)
-    q, r = divrem(x, m)
-    return r
+function Base.div(x::UInt128, m::UInt128)
+    if x == 0
+        return UInt128(0)
+    end
+
+    quotient = UInt128(0)
+    remainder = UInt128(0)
+
+    for i in 0:127
+        remainder = (remainder << 1) | ((x >> (127 - i)) & 1)
+        if remainder >= m
+            remainder -= m
+            quotient |= (UInt128(1) << (127 - i))
+        end
+    end
+
+    return quotient
+end
+
+function Base.mod(x::Int128, m::Int128)
+    if x == 0
+        return Int128(0)
+    end
+
+    sign = 1
+    if (x < 0) != (m < 0)
+        sign = -1
+    end
+
+    n = abs(x)
+    m = abs(m)
+
+    remainder = Int128(0)
+
+    for i in 0:127
+        remainder = (remainder << 1) | ((x >> (127 - i)) & 1)
+        if remainder >= m
+            remainder -= m
+        end
+    end
+    result = remainder * sign
+    return result < 0 ? result + m : result
+end
+
+function Base.div(x::Int128, m::Int128)
+    if x == 0
+        return Int128(0)
+    end
+
+    sign = 1
+    if (x < 0) != (m < 0)
+        sign = -1
+    end
+
+    x = abs(x)
+    m = abs(m)
+
+    quotient = Int128(0)
+    remainder = Int128(0)
+
+    for i in 0:127
+        remainder = (remainder << 1) | ((x >> (127 - i)) & 1)
+        if remainder >= m
+            remainder -= m
+            quotient |= (Int128(1) << (127 - i))
+        end
+    end
+
+    return quotient * sign
 end
 
 @inline function sub_mod(x::Signed, y::Signed, m::Signed)
@@ -29,64 +103,24 @@ end
     end
 end
 
-function Base.divrem(n::Int128, m::Int128)::Int128
-    if n == 0
-        return Int128(0)
-    end
-
-    sign = 1
-    if (n < 0) != (m < 0)
-        sign = -1
-    end
-
-    n = abs(n)
-    m = abs(m)
-
-    quotient = Int128(0)
-    remainder = Int128(0)
-
-    for i in 0:127
-        remainder = (remainder << 1) | ((n >> (127 - i)) & 1)
-        if remainder >= m
-            remainder -= m
-            quotient |= (Int128(1) << (127 - i))
-        end
-    end
-
-    return quotient * sign, remainder
-end
-
-function Base.divrem(n::UInt128, m::UInt128)
-    if n == 0
-        return UInt128(0)
-    end
-
-    quotient = UInt128(0)
-    remainder = UInt128(0)
-
-    for i in 0:127
-        remainder = (remainder << 1) | ((n >> (127 - i)) & 1)
-        if remainder >= m
-            remainder -= m
-            quotient |= (UInt128(1) << (127 - i))
-        end
-    end
-
-    return quotient, remainder
-end
-
 function crt(vec, pregen)
     x = eltype(pregen)(vec[1])
-
+    # @cuprintln(x)
     for i in axes(pregen, 2)
         x = mod(x * pregen[2, i] + vec[i + 1] * pregen[1, i], pregen[3, i])
+        # @cuprintln(x)
     end
 
     return x
 end
 
-function get_fft_size(vec, pow)
+function get_fft_size(vec::Union{Vector, CuVector}, pow)
     finalLength = (length(vec) - 1) * pow + 1
+    return Base._nextpow2(finalLength)
+end
+
+function get_fft_size(veclength::Int, pow)
+    finalLength = (veclength - 1) * pow + 1
     return Base._nextpow2(finalLength)
 end
 
@@ -123,52 +157,6 @@ function pregen_crt(primeArray::Vector{T}) where T<:Integer
 
     @assert all([i > 0 for i in result]) display(result)
     return T.(result)
-end
-
-function Base.divrem(n::Int128, m::Int128)
-    if n == 0
-        return Int128(0)
-    end
-
-    sign = 1
-    if (n < 0) != (m < 0)
-        sign = -1
-    end
-
-    n = abs(n)
-    m = abs(m)
-
-    quotient = Int128(0)
-    remainder = Int128(0)
-
-    for i in 0:127
-        remainder = (remainder << 1) | ((n >> (127 - i)) & 1)
-        if remainder >= m
-            remainder -= m
-            quotient |= (Int128(1) << (127 - i))
-        end
-    end
-
-    return quotient * sign, remainder
-end
-
-function Base.divrem(n::UInt128, m::UInt128)
-    if n == 0
-        return UInt128(0)
-    end
-
-    quotient = UInt128(0)
-    remainder = UInt128(0)
-
-    for i in 0:127
-        remainder = (remainder << 1) | ((n >> (127 - i)) & 1)
-        if remainder >= m
-            remainder -= m
-            quotient |= (UInt128(1) << (127 - i))
-        end
-    end
-
-    return quotient, remainder
 end
 
 function extended_gcd_iterative(a::T, b::T) where T<:Signed
@@ -217,10 +205,6 @@ function power_mod(n::Integer, p::Integer, m::Integer)
     return result
 end
 
-function montgomery_power_mod(n::Integer, p::Integer, m::Integer)
-    
-end
-
 function mod_inverse(n::Integer, p::Integer)
     n = BigInt(n)
     p = BigInt(p)
@@ -237,7 +221,6 @@ function mod_inverse(n::Integer, p::Integer)
 
     return t < 0 ? typeof(n)(t + p) : typeof(n)(t)
 end
-
 
 function nth_principal_root_of_unity(n::Integer, p::Integer)
     @assert mod(p - 1, n) == 0 "n must divide p-1"
@@ -259,7 +242,7 @@ function nth_principal_root_of_unity(n::Integer, p::Integer)
     end
 
     root_of_unity = powermod(g, order, p)
-    return typeof(p)(root_of_unity)
+    return typeof(n)(root_of_unity)
 end
 
 function npruarray_generator(primearray::Array{<:Integer}, n)

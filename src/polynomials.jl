@@ -1,18 +1,39 @@
+include("get_oscar_data.jl")
+
 module Polynomials
 using CUDA
+using Oscar
+using ..GetOscarData
 
-import Base: ==, show
+import Base: show
 
 export HomogeneousPolynomial, DensePolynomial, SparsePolynomial, MultivariatePolynomial, 
 remove_zeros, encode_degrees, cpu_encode_degrees, gpu_encode_degrees, pretty_string, show, 
-==, decode_degrees, cpu_decode_degrees, gpu_decode_degrees
+decode_degrees, cpu_decode_degrees, gpu_decode_degrees, homogkron, convert_to_oscar, invhomogkron
 
 mutable struct HomogeneousPolynomial{T<:Number}
     coeffs::Vector{T}
-    degrees::Array{UInt32, 2}
-    encodedDegrees::Vector{UInt64}
+    degrees::Array{<:Integer}
     homogeneousDegree::Int
-    sorted::Bool
+
+    function HomogeneousPolynomial(coeffs::Vector{T}, degrees; check = false) where T<:Number
+        homDeg = sum(degrees[:, 1])
+        if !(check)
+            for i in axes(degrees, 2)
+                if sum(degrees[:, i]) != homDeg
+                    throw("Polynomial is not homogeneous: non-homogeneous index: $i")
+                end
+            end
+        end
+        @assert length(coeffs) == size(degrees, 2)
+        
+        return new{T}(coeffs, degrees, homDeg)
+    end
+
+    function HomogeneousPolynomial(p::FqMPolyRingElem)
+        coeffs, degrees = convert_to_gpu_representation(p)
+        return HomogeneousPolynomial(coeffs, degrees)
+    end
 end
 
 # Just leaving this dead in a ditch for now since kronecker stuff isn't fun: 
@@ -26,34 +47,10 @@ end
 mutable struct SparsePolynomial{T<:Number}
     coeffs::Vector{T}
     degrees::Vector{UInt64}
-    sorted::Bool
 end
 
 mutable struct DensePolynomial{T<:Number}
     coeffs::Vector{T}
-end
-
-function HomogeneousPolynomial(coeffs::Vector{T}, degrees; check = false) where T<:Number
-    homDeg = sum(degrees[:, 1])
-    if !(check)
-        for i in axes(degrees, 2)
-            if sum(degrees[:, i]) != homDeg
-                throw("Polynomial is not homogeneous: non-homogeneous index: $i")
-            end
-        end
-    end
-    @assert length(coeffs) == size(degrees, 2)
-    temp = encode_degrees(degrees, homDeg + 1, true)
-    @assert length(coeffs) == length(temp)
-    return HomogeneousPolynomial(coeffs, UInt32.(degrees), encode_degrees(degrees, homDeg + 1, true), homDeg, false)
-end
-
-function HomogeneousPolynomial(coeffs::Vector{T}, degrees, key) where T<:Number
-    homDeg = sum(degrees[:, 1])
-    @assert length(coeffs) == size(degrees, 2)
-    temp = encode_degrees(degrees, key, true)
-    @assert length(coeffs) == length(temp)
-    return HomogeneousPolynomial(coeffs, UInt32.(degrees), encode_degrees(degrees, homDeg + 1, true), homDeg, false)
 end
 
 function remove_zeros(hp::HomogeneousPolynomial{T}) where T<:Integer
@@ -61,7 +58,6 @@ function remove_zeros(hp::HomogeneousPolynomial{T}) where T<:Integer
 
     hp.coeffs = hp.coeffs[nonzeroIndices]
     hp.degrees = hp.degrees[:, nonzeroIndices]
-    hp.encodedDegrees = hp.encodedDegrees[nonzeroIndices]
 
     return nothing
 end
@@ -78,7 +74,7 @@ function kron(vec, key::Int)
 end
 
 function homogkron(vec, key::Int)
-    result = 0
+    result = 1
     curr = 1
     for var in 1:length(vec) - 1
         result += vec[var] * curr
@@ -99,8 +95,6 @@ end
 
 function invhomogkron(num::T, key::Int, numVars, dest, totalDegree) where T<:Integer
     # println("decoding $num with key $key and totalDegree $totalDegree")
-    @assert numVars == length(dest)
-    @assert totalDegree > 0 "totalDegree has to be greater than 0!"
     for i in 1:numVars - 1
         num, r = divrem(num, key)
         dest[i] = r
@@ -162,26 +156,17 @@ function gpu_decode_degrees(encodedDegrees::CuArray{UInt64}, key, numVars, homog
     return result
 end
 
-function HomogeneousPolynomial(sp::SparsePolynomial, key::Int, numVars, homogDegree)
-    # TODO
-    degrees = decode_degrees(sp.degrees, key, numVars, true, totalDegree)
-    return HomogeneousPolynomial(sp.coeffs, degrees, sp.degrees, homogDegree, false)
-end
+# function HomogeneousPolynomial(sp::SparsePolynomial, key::Int, numVars, homogDegree)
+#     # TODO
+#     degrees = decode_degrees(sp.degrees, key, numVars, true, totalDegree)
+#     return HomogeneousPolynomial(sp.coeffs, degrees, sp.degrees, homogDegree, false)
+# end
 
-function DensePolynomial(hp::HomogeneousPolynomial, key::Int, length)
-    # TODO
-    return DensePolynomial()
-end
-
-function HomogeneousPolynomial(densePolynomial)
-
-end
-
-function encode_degrees(degrees::Array{T, 2}, key, homog) where T<:Integer
+function encode_degrees(degrees::Array{T}, key, homog) where T<:Integer
     return cpu_encode_degrees(degrees, key, homog)
 end
 
-function cpu_encode_degrees(degrees::Array{T, 2}, key::Int, homog) where T<:Integer
+function cpu_encode_degrees(degrees::Array{T}, key::Int, homog) where T<:Integer
     result = zeros(UInt64, size(degrees, 2))
 
     kronfun = homog ? homogkron : kron
@@ -290,95 +275,114 @@ function Base.show(io::IO, hp::HomogeneousPolynomial)
     println(io, pretty_string(hp))
 end
 
-function sort_terms(hp::HomogeneousPolynomial)
-    perm = sortperm(hp.encodedDegrees, lt = !isless)
+function convert_to_oscar(hp::HomogeneousPolynomial, ring::MPolyRing)
+    vars = gens(ring)
+    numVars = size(hp.degrees, 1)
 
-    hp.encodedDegrees = hp.encodedDegrees[perm]
-    hp.coeffs = hp.coeffs[perm]
-    hp.degrees = hp.degrees[:, perm]
+    @assert length(vars) == numVars "Number of variables of hp and ring not compatible"
 
-    hp.sorted = true
+    result = zero(ring)
 
-    return nothing
+    for (i, coeff) in enumerate(hp.coeffs)
+        expRow = hp.degrees[:, i]
+        term = coeff * prod(vars[j] ^ expRow[j] for j in 1:numVars)
+        result += term
+    end
+
+    return result
 end
 
-function Base.:(==)(hp1::HomogeneousPolynomial{T}, hp2::HomogeneousPolynomial) where T<:Number
-    if hp1.homogeneousDegree != hp2.homogeneousDegree
-        return false
-    end
-    if !hp1.sorted
-        sort_terms(hp1)
-    end
-    if !hp2.sorted
-        sort_terms(hp2)
-    end
-    remove_zeros(hp1)
-    remove_zeros(hp2)
-    return hp1.coeffs == T.(hp2.coeffs) && hp1.degrees == hp2.degrees
 end
 
-function DensePolynomial(sp::SparsePolynomial{T}) where T<:Number
-    if length(sp.coeffs) == 0
-        return DensePolynomial([])
-    end
-    if sp.sorted
-        maxdeg = sp.degrees[1]
-    else
-        maxdeg = maximum(sp.degrees)
-    end
+# function sort_terms(hp::HomogeneousPolynomial)
+#     perm = sortperm(hp.encodedDegrees, lt = !isless)
+
+#     hp.encodedDegrees = hp.encodedDegrees[perm]
+#     hp.coeffs = hp.coeffs[perm]
+#     hp.degrees = hp.degrees[:, perm]
+
+#     hp.sorted = true
+
+#     return nothing
+# end
+
+# function Base.:(==)(hp1::HomogeneousPolynomial{T}, hp2::HomogeneousPolynomial) where T<:Number
+#     if hp1.homogeneousDegree != hp2.homogeneousDegree
+#         return false
+#     end
+#     if !hp1.sorted
+#         sort_terms(hp1)
+#     end
+#     if !hp2.sorted
+#         sort_terms(hp2)
+#     end
+#     remove_zeros(hp1)
+#     remove_zeros(hp2)
+#     return hp1.coeffs == T.(hp2.coeffs) && hp1.degrees == hp2.degrees
+# end
+
+# function DensePolynomial(sp::SparsePolynomial{T}) where T<:Number
+#     if length(sp.coeffs) == 0
+#         return DensePolynomial([])
+#     end
+#     if sp.sorted
+#         maxdeg = sp.degrees[1]
+#     else
+#         maxdeg = maximum(sp.degrees)
+#     end
     
-    resultCoeffs = zeros(T, maxdeg + 1)
+#     resultCoeffs = zeros(T, maxdeg + 1)
 
-    for i in eachindex(sp.degrees)
-        resultCoeffs[sp.degrees[i] + 1] = sp.coeffs[i]
-    end
+#     for i in eachindex(sp.degrees)
+#         resultCoeffs[sp.degrees[i] + 1] = sp.coeffs[i]
+#     end
 
-    return DensePolynomial(resultCoeffs)
-end
+#     return DensePolynomial(resultCoeffs)
+# end
 
 
-function SparsePolynomial(coeffs::Vector{T}, degrees::Vector) where T<:Number
-    return SparsePolynomial(coeffs, UInt64.(degrees), false)
-end
+# function SparsePolynomial(coeffs::Vector{T}, degrees::Vector) where T<:Number
+#     return SparsePolynomial(coeffs, UInt64.(degrees), false)
+# end
 
-function sort_terms(sp::SparsePolynomial)
-    perm = sortperm(sp.degrees, lt = !isless)
+# function sort_terms(sp::SparsePolynomial)
+#     perm = sortperm(sp.degrees, lt = !isless)
 
-    sp.coeffs = sp.coeffs[perm]
-    sp.degrees = sp.degrees[perm]
+#     sp.coeffs = sp.coeffs[perm]
+#     sp.degrees = sp.degrees[perm]
 
-    sp.sorted = true
+#     sp.sorted = true
     
-    return nothing
-end
+#     return nothing
+# end
 
-function remove_zeros(sp::SparsePolynomial{T}) where T<:Integer
-    nonzeroIndices = findall(c -> c != T(0), sp.coeffs)
+# function remove_zeros(sp::SparsePolynomial{T}) where T<:Integer
+#     nonzeroIndices = findall(c -> c != T(0), sp.coeffs)
 
-    sp.coeffs = sp.coeffs[nonzeroIndices]
-    sp.degrees = sp.degrees[nonzeroIndices]
+#     sp.coeffs = sp.coeffs[nonzeroIndices]
+#     sp.degrees = sp.degrees[nonzeroIndices]
 
-    return nothing
-end
+#     return nothing
+# end
 
-function SparsePolynomial(hp::HomogeneousPolynomial)
-    return SparsePolynomial(hp.coeffs, hp.encodedDegrees)
-end
+# function SparsePolynomial(hp::HomogeneousPolynomial)
+#     return SparsePolynomial(hp.coeffs, hp.encodedDegrees)
+# end
 
-function Base.:(==)(sp1::SparsePolynomial{T}, sp2::SparsePolynomial) where T<:Number
-    if !sp1.sorted
-        sort_terms(sp1)
-    end
-    if !sp2.sorted
-        sort_terms(sp2)
-    end
-    remove_zeros(sp1)
-    remove_zeros(sp2)
-    return sp1.coeffs == T.(sp2.coeffs) && sp1.degrees == sp2.degrees
-end
+# function Base.:(==)(sp1::SparsePolynomial{T}, sp2::SparsePolynomial) where T<:Number
+#     if !sp1.sorted
+#         sort_terms(sp1)
+#     end
+#     if !sp2.sorted
+#         sort_terms(sp2)
+#     end
+#     remove_zeros(sp1)
+#     remove_zeros(sp2)
+#     return sp1.coeffs == T.(sp2.coeffs) && sp1.degrees == sp2.degrees
+# end
 
-function MultivariatePolynomial(coeffs::Vector{T}, degrees::Array) where T<:Integer
-    return MultivariatePolynomial(coeffs, UInt32.(degrees))
-end
+# function MultivariatePolynomial(coeffs::Vector{T}, degrees::Array) where T<:Integer
+#     return MultivariatePolynomial(coeffs, UInt32.(degrees))
+# end
 
-end
+

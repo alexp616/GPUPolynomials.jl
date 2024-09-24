@@ -16,13 +16,27 @@ mutable struct GPUPowPregen{T<:Integer}
 end
 
 function pregen_gpu_pow(primeArray::Vector{<:Integer}, fftSize)
-    pregentime = @timed begin
+    pregentime = @timed begin 
         nttType, crtType, resultType = get_types(primeArray)
         nttpregen, inttpregen = pregen_ntt(nttType.(primeArray), fftSize)
         crtpregen = CuArray(pregen_crt(crtType.(primeArray)))
     end
+    println("GPUPowPregen took $(pregentime.time) s to pregenerate")
 
     return GPUPowPregen{nttType}(CuArray(nttType.(primeArray)), nttpregen, inttpregen, crtpregen, resultType)
+end
+
+function invhomogkron(num::T, key::Int, numVars, totalDegree) where T<:Integer
+    # println("decoding $num with key $key and totalDegree $totalDegree")
+    dest = zeros(Int, numVars)
+    for i in 1:numVars - 1
+        num, r = divrem(num, key)
+        dest[i] = r
+        totalDegree -= r
+    end
+    dest[numVars] = totalDegree
+
+    return dest
 end
 
 function gpu_ntt_pow(vec::CuVector{<:Integer}, pow::Int; pregen::Union{GPUPowPregen, Nothing} = nothing, docrt = true)
@@ -45,6 +59,16 @@ function gpu_ntt_pow(vec::CuVector{<:Integer}, pow::Int; pregen::Union{GPUPowPre
 
     gpu_intt!(multimodvec, pregen.inttpregen)
 
+    # temp = Array(multimodvec)
+    # for i in axes(temp, 1)
+    #     for j in axes(temp, 2)
+    #         if temp[i, j] != 0
+    #             println("multimodvec[$i, :]: $(Int.(temp[i, :])), decodes to $(invhomogkron(i - 1, 81, 4, 80))")
+    #             break
+    #         end
+    #     end
+    # end
+    
     if length(pregen.primeArray) == 1
         return pregen.resultType.(multimodvec)[1:finalLength]
     elseif docrt
@@ -71,10 +95,12 @@ function broadcast_pow_kernel!(multimodvec, primeArray, pow)
     end
 end
 
-function build_result(multimodvec, crtpregen, finalLength, resultType)::CuVector
-    result = CUDA.zeros(eltype(crtpregen), finalLength)
+function build_result(multimodvec, crtpregen, finalLength::Int, resultType::DataType)::CuVector
+    # result = CUDA.zeros(eltype(crtpregen), finalLength)
+    result = CuArray(zeros(eltype(crtpregen), finalLength))
     # zerovec = CUDA.zeros(eltype(multimodvec), size(multimodvec, 2))
 
+    @assert length(result) <= size(multimodvec, 1)
     kernel = @cuda launch=false build_result_kernel!(multimodvec, crtpregen, result)
     config = launch_configuration(kernel.fun)
     threads = min(finalLength, Base._prevpow2(config.threads))
@@ -82,8 +108,12 @@ function build_result(multimodvec, crtpregen, finalLength, resultType)::CuVector
 
     kernel(multimodvec, crtpregen, result; threads = threads, blocks = blocks)
 
+    # @assert resultType == UInt64
+    # result = map(x -> convert(resultType, x), result)
+    # return UInt64.(result) # erroring
     return resultType.(result)
 end
+
 
 function build_result_kernel!(multimodvec, crtpregen, result)
     idx = threadIdx().x + (blockIdx().x - 1) * blockDim().x

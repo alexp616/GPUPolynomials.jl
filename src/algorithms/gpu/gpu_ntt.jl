@@ -32,6 +32,7 @@ function pregen_ntt(primeArray::Vector{<:Integer}, len)
     log2len = Int(log2(len))
 
     npruArray = npruarray_generator(primeArray, len)
+    # display(npruArray)
     @assert all([i > 0 for i in npruArray])
     thetaArray = generate_theta_m(primeArray, len, log2len, npruArray)
     @assert all([i > 0 for i in thetaArray])

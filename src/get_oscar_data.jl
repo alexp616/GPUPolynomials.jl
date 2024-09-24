@@ -1,6 +1,6 @@
 module GetOscarData
 
-export get_data, convert_data_to_oscar
+export convert_to_gpu_representation, convert_data_to_oscar
 using Oscar
 
 # TODO
@@ -38,21 +38,31 @@ end
 
 # FqMPolyRingElem.data is just the gr_mpoly_struct defined here:
 # https://github.com/flintlib/flint/blob/main/src/gr_mpoly.h
-function get_data(poly::FqMPolyRingElem)
-    println("Running get_data")
-    coeffsDataType = Int64
-    expsDataType = get_int_type(Base._nextpow2(poly.data.bits))
+# function get_data(poly::FqMPolyRingElem)
+#     println("Running get_data")
+#     coeffsDataType = Int64
+#     expsDataType = get_int_type(Base._nextpow2(poly.data.bits))
 
-    numCoeffs = length(poly)
+#     numCoeffs = length(poly)
 
-    coeffsPtr = Base.unsafe_convert(Ptr{coeffsDataType}, poly.data.coeffs)
-    coeffsVec = unsafe_wrap(Vector{coeffsDataType}, coeffsPtr, numCoeffs)
+#     coeffsPtr = Base.unsafe_convert(Ptr{coeffsDataType}, poly.data.coeffs)
+#     coeffsVec = unsafe_wrap(Vector{coeffsDataType}, coeffsPtr, numCoeffs)
 
-    expVecs = reverse!.(leading_exponent_vector.(terms(poly)))
-    expMat = expsDataType.(reduce(hcat, expVecs))
+#     expVecs = reverse!.(leading_exponent_vector.(terms(poly)))
+#     expMat = expsDataType.(reduce(hcat, expVecs))
 
-    println("Finished get_data")
-    return coeffsVec, expMat
+#     println("Finished get_data")
+#     return coeffsVec, expMat
+# end
+
+function convert_to_gpu_representation(p)
+    coeffs = coefficients(p)
+    coeffs_as_int_arr = Int.(lift.((ZZ,),coeffs))
+
+    exp_vecs = leading_exponent_vector.(terms(p))
+
+    expMat = reduce(hcat, exp_vecs)
+    return coeffs_as_int_arr, expMat
 end
 
 # This method isn't perfect: FLINT optimizes FqMPolyRingElem.data.bits to minimize the machine

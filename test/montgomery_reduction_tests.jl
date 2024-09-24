@@ -1,6 +1,7 @@
 module MontgomeryReductionTests
 
-include("../src/algorithms/ntt_utils.jl")
+include("../src/utils/ntt_utils.jl")
+include("../src/utils/montgomery_reduction.jl")
 
 using Test
 using Primes
