@@ -1,98 +1,62 @@
-module GetOscarData
-
-export convert_to_gpu_representation, convert_data_to_oscar
 using Oscar
+using FLINT_jll
 
-# TODO
-# Sort_to_kronecker_order
-# ZZPolyRingElem
+import Oscar.fpMPolyRingElem
 
-function get_int_type(n)
-    return eval(Symbol("Int", n))
+include("utils/get_int_type.jl")
+
+function get_coeffs(poly::FqMPolyRingElem)
+    coeffsDataType = get_uint_type((poly.data.coeffs_alloc ÷ poly.data.length) << 6)
+    coeffsPtr = Base.unsafe_convert(Ptr{coeffsDataType}, poly.data.coeffs)
+    coeffsVec = unsafe_wrap(Vector{coeffsDataType}, coeffsPtr, poly.data.length)
+
+    return coeffsVec
 end
 
-# get_data() will have to be stored away for a bit because f.data.bits
-# sometimes doesn't convert to an Integer type, meaning the exponents
-# vector is bitpacked. This makes direct manipulation a bit harder than normal
-# Stuff about bit packing: 
-# https://github.com/flintlib/flint/blob/3dbe2399e74f24d8a883a97d736aee8eaf331b1c/src/mpoly.h#L54C1-L59C3
+function get_exps(poly::FqMPolyRingElem)
+    expsDataType = get_uint_type((poly.data.exps_alloc ÷ poly.data.length) << 6)
+    expsPtr = Base.unsafe_convert(Ptr{expsDataType}, poly.data.exps)
+    expsVec = unsafe_wrap(Vector{expsDataType}, expsPtr, poly.data.length)
 
-# function get_data(poly::FqMPolyRingElem)
-#     numCoeffs = length(poly)
-#     numVars = poly.parent.data.nvars
-
-#     # I think for Fq, coeffs types are fixed at Int64 and we pray the user doesn't
-#     # want to use primes bigger than 2^63 - 1
-#     coeffsDataType = Int64
-#     expsDataType = get_int_type(poly.data.bits)
-
-#     coeffsPtr = Base.unsafe_convert(Ptr{coeffsDataType}, poly.data.coeffs)
-#     expsPtr = Base.unsafe_convert(Ptr{expsDataType}, poly.data.exps)
-
-#     coeffsVec = unsafe_wrap(Vector{coeffsDataType}, coeffsPtr, numCoeffs)
-#     expsVec = unsafe_wrap(Vector{expsDataType}, expsPtr, numCoeffs * numVars)
-#     expsArray = reshape(expsVec, numVars, numCoeffs)
-
-#     return coeffsVec, expsArray
-# end
-
-# FqMPolyRingElem.data is just the gr_mpoly_struct defined here:
-# https://github.com/flintlib/flint/blob/main/src/gr_mpoly.h
-# function get_data(poly::FqMPolyRingElem)
-#     println("Running get_data")
-#     coeffsDataType = Int64
-#     expsDataType = get_int_type(Base._nextpow2(poly.data.bits))
-
-#     numCoeffs = length(poly)
-
-#     coeffsPtr = Base.unsafe_convert(Ptr{coeffsDataType}, poly.data.coeffs)
-#     coeffsVec = unsafe_wrap(Vector{coeffsDataType}, coeffsPtr, numCoeffs)
-
-#     expVecs = reverse!.(leading_exponent_vector.(terms(poly)))
-#     expMat = expsDataType.(reduce(hcat, expVecs))
-
-#     println("Finished get_data")
-#     return coeffsVec, expMat
-# end
-
-function convert_to_gpu_representation(p)
-    coeffs = coefficients(p)
-    coeffs_as_int_arr = Int.(lift.((ZZ,),coeffs))
-
-    exp_vecs = leading_exponent_vector.(terms(p))
-
-    expMat = reduce(hcat, exp_vecs)
-    return coeffs_as_int_arr, expMat
+    return expsVec
 end
 
-# This method isn't perfect: FLINT optimizes FqMPolyRingElem.data.bits to minimize the machine
-# words needed to store exps and packs exponent vectors as such, and I don't want to deal with 
-# bit packing in Julia right now. Basically, this will take slightly more space, but is faster 
-# than any other method to convert to Oscar I can think of
-function convert_data_to_oscar(coeffsVec::Vector{Int}, expsArray::Matrix{T}, parentRing::FqMPolyRing; sorted = false) where T<:Integer
-    println("Running convert_data")
-    result = zero(parentRing)
-    numVars = parentRing.data.nvars
-
-    if length(coeffsVec) != size(expsArray, 2)
-        throw(ArgumentError("coeffsVec doesn't have same number of terms as expsArray"))
-    end
-    if numVars != size(expsArray, 1)
-        throw(ArgumentError("expsArray doesn't have the same number of variables as parentRing"))
+function exp_matrix_to_vec(mat, bits)
+    result = zeros(get_uint_type(Base._nextpow2(bits * size(mat, 1))), size(mat, 2))
+    mat = reverse(mat, dims = 1)
+    for i in axes(mat, 2)
+        temp = zero(eltype(result))
+        for j in axes(mat, 1)
+            temp += mat[j, i] << (bits * (j - 1))
+        end
+        result[i] = temp
     end
 
-    result.data.coeffs = reinterpret(Ptr{nothing}, pointer(coeffsVec))
-    result.data.exps = reinterpret(Ptr{nothing}, pointer(expsArray))
-    result.data.length = length(coeffsVec)
-    result.data.bits = sizeof(eltype(expsArray)) * 8
-    result.data.coeffs_alloc = result.data.length
-    result.data.exps_alloc = cld(result.data.length * result.data.bits * numVars, 8)
-
-    println("Finished convert_data")
     return result
 end
 
-function convert_data_to_oscar(coeffsVec::Vector{Int}, expsArray::Matrix{T}, parentRing::ZZMPolyRing; sorted = false) where T<:Integer
-    return nothing
+function Oscar.fpMPolyRingElem(ctx::fpMPolyRing, a::Vector{UInt}, b::Matrix{UInt})
+    z = fpMPolyRingElem(ctx)
+    ccall((:nmod_mpoly_init2, libflint), Nothing,
+          (Ref{fpMPolyRingElem}, Int, Ref{fpMPolyRing}),
+          z, length(a), ctx)
+    z.parent = ctx
+
+    @inbounds for i in 1:length(a)
+        if a[i] != zero(eltype(a))
+            ccall((:nmod_mpoly_push_term_ui_ui, libflint), Nothing,
+                (Ref{fpMPolyRingElem}, UInt, Ptr{UInt}, Ref{fpMPolyRing}),
+                z, a[i], pointer(b, (i - 1) * ctx.nvars + 1), ctx)
+        end
+    end
+
+    return z
 end
+
+function get_coeffs(poly::ZZMPolyRingElem)
+    throw(ArgumentError("This hasn't been implemented yet"))
+end
+
+function get_exps(poly::ZZMPolyRingElem)
+    throw(ArgumentError("This hasn't been implemented yet"))
 end

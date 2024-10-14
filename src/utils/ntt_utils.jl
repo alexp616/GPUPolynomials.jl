@@ -1,97 +1,6 @@
-using CUDA
-using Primes
-using Dates
-using BitIntegers
+include("int128stuff.jl")
+include("get_int_type.jl")
 
-import Base: mod, div
-
-function Base.mod(x::UInt128, m::UInt128)
-    if x == 0
-        return UInt128(0)
-    end
-
-    remainder = UInt128(0)
-
-    for i in 0:127
-        remainder = (remainder << 1) | ((x >> (127 - i)) & 1)
-        if remainder >= m
-            remainder -= m
-        end
-    end
-
-    return remainder
-end
-
-function Base.div(x::UInt128, m::UInt128)
-    if x == 0
-        return UInt128(0)
-    end
-
-    quotient = UInt128(0)
-    remainder = UInt128(0)
-
-    for i in 0:127
-        remainder = (remainder << 1) | ((x >> (127 - i)) & 1)
-        if remainder >= m
-            remainder -= m
-            quotient |= (UInt128(1) << (127 - i))
-        end
-    end
-
-    return quotient
-end
-
-function Base.mod(x::Int128, m::Int128)
-    if x == 0
-        return Int128(0)
-    end
-
-    sign = 1
-    if (x < 0) != (m < 0)
-        sign = -1
-    end
-
-    n = abs(x)
-    m = abs(m)
-
-    remainder = Int128(0)
-
-    for i in 0:127
-        remainder = (remainder << 1) | ((x >> (127 - i)) & 1)
-        if remainder >= m
-            remainder -= m
-        end
-    end
-    result = remainder * sign
-    return result < 0 ? result + m : result
-end
-
-function Base.div(x::Int128, m::Int128)
-    if x == 0
-        return Int128(0)
-    end
-
-    sign = 1
-    if (x < 0) != (m < 0)
-        sign = -1
-    end
-
-    x = abs(x)
-    m = abs(m)
-
-    quotient = Int128(0)
-    remainder = Int128(0)
-
-    for i in 0:127
-        remainder = (remainder << 1) | ((x >> (127 - i)) & 1)
-        if remainder >= m
-            remainder -= m
-            quotient |= (Int128(1) << (127 - i))
-        end
-    end
-
-    return quotient * sign
-end
 
 @inline function sub_mod(x::Signed, y::Signed, m::Signed)
     return mod(x - y, m)
@@ -124,14 +33,6 @@ end
 function get_fft_size(veclength::Int, pow)
     finalLength = (veclength - 1) * pow + 1
     return Base._nextpow2(finalLength)
-end
-
-function get_int_type(n)
-    return eval(Symbol("Int", n))
-end
-
-function get_uint_type(n)
-    return eval(Symbol("UInt", n))
 end
 
 function pregen_crt(primeArray::Vector{T}) where T<:Integer
@@ -172,23 +73,6 @@ function extended_gcd_iterative(a::T, b::T) where T<:Signed
     end
     @assert a == 1 "$a and $b aren't coprime"
     return x0, y0
-end
-
-function chinese_remainder_two(a::T, n::T, b::Integer, m::Integer) where T<:Integer
-    b = T(b)
-    m = T(m)
-
-    n0, m0 = n, m
-    x0, x1 = T(1), T(0)
-    y0, y1 = T(0), T(1)
-    while m != 0
-        q = div(n, m)
-        n, m = m, mod(n, m)
-        x0, x1 = x1, x0 - q * x1
-        y0, y1 = y1, y0 - q * y1
-    end
-
-    return mod(a * m0 * y0 + b * n0 * x0, T(n0 * m0))
 end
 
 function power_mod(n::Integer, p::Integer, m::Integer)

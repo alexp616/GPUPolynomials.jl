@@ -1,17 +1,23 @@
 module GPUPolynomials
 
+using CUDA
+using Primes
+using Dates
+using BitIntegers
+using Oscar
+using FLINT_jll
+
 include("algorithms/gpu/gpu_ntt_pow.jl")
+
+export mod, div
+
+export GPUNTTPregen, gpu_ntt!, memorysafe_gpu_ntt!, gpu_intt!, GPUPowPregen, pregen_gpu_pow, gpu_ntt_pow, sparsify, build_result, generate_butterfly_permutations, memorysafe_gpu_ntt_pow
+
 include("get_oscar_data.jl")
-include("polynomials.jl")
+include("homogeneous_polynomial.jl")
 
-using .GetOscarData
-using .Polynomials
-using .GPUNTTPow
-
-for submodule in [GetOscarData, Polynomials, GPUNTTPow]
-    for name in names(submodule, all = false, imported = true)
-        @eval export $(Symbol(name))
-    end
-end
+export HomogeneousPolynomial, get_coeffs, get_exps, exps_matrix, nvars, convert, get_dense_representation, get_sparse_representation, new_MPolyRingElem, gpu_pow, pregen_gpu_pow, exp_matrix_to_vec, fpMPolyRingElem, sort_terms
 
 end
+
+
