@@ -44,7 +44,7 @@ end
 function test_gpu_pow()
     n = 4
     p = 5
-    pow = 2
+    pow = 3
     R, vars = polynomial_ring(GF(p), n)
     (x, y, z, w) = vars
     # f = random_homog_poly_mod(p, vars, n)

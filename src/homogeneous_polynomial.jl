@@ -119,6 +119,7 @@ function pregen_gpu_pow(hp, pow::Int, type)
     return pregen_gpu_pow(primeArray, fftsize)
 end
 
+
 function gpu_pow(hp::HomogeneousPolynomial, pow::Int, pregen::GPUPowPregen{T}) where T
     resultDegree = hp.homogDegree * pow
     key = (resultDegree) + 1
