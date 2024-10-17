@@ -15,6 +15,14 @@ Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [compat]
 julia = "1.11.0, 1.11"
+BitIntegers = "0.3.2"
+CUDA = "5.5.2"
+Combinatorics = "1.0.2"
+Dates = "1.11.0"
+Oscar = "1.1.1"
+Primes = "0.5.6"
+Random = "1.11.0"
+Test = "1.11.0"
 
 [extras]
 CUDA_Runtime_jll = "76a88914-d11a-5bdc-97e0-2f5a05c973a2"
