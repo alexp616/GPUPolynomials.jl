@@ -1,15 +1,12 @@
 module GPUPolynomials
 
-using CUDA
-using Primes
-using Dates
 using BitIntegers
-using Oscar
+using CUDA
 using FLINT_jll
+using Oscar
+using Primes
 
 include("algorithms/gpu/gpu_ntt_pow.jl")
-
-export mod, div
 
 export GPUNTTPregen, gpu_ntt!, memorysafe_gpu_ntt!, gpu_intt!, GPUPowPregen, pregen_gpu_pow, gpu_ntt_pow, sparsify, build_result, generate_butterfly_permutations, memorysafe_gpu_ntt_pow
 

@@ -2,7 +2,7 @@ include("../src/GPUPolynomials.jl")
 
 module HomogeneousPolynomialTests
 
-include("../delta1/randompolynomials.jl")
+include("randompolynomials.jl")
 
 using ..GPUPolynomials
 using Oscar
