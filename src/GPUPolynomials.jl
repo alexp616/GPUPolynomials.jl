@@ -8,12 +8,35 @@ using Primes
 
 include("algorithms/gpu/gpu_ntt_pow.jl")
 
-export GPUNTTPregen, gpu_ntt!, memorysafe_gpu_ntt!, gpu_intt!, GPUPowPregen, pregen_gpu_pow, gpu_ntt_pow, sparsify, build_result, generate_butterfly_permutations, memorysafe_gpu_ntt_pow
+export GPUNTTPregen
+export gpu_ntt!
+export memorysafe_gpu_ntt!
+export gpu_intt!
+export GPUPowPregen
+export pregen_gpu_pow
+export gpu_ntt_pow
+export sparsify
+export build_result
+export generate_butterfly_permutations
+export memorysafe_gpu_ntt_pow
 
 include("get_oscar_data.jl")
 include("homogeneous_polynomial.jl")
 
-export HomogeneousPolynomial, get_coeffs, get_exps, exps_matrix, nvars, convert, get_dense_representation, get_sparse_representation, new_MPolyRingElem, gpu_pow, pregen_gpu_pow, exp_matrix_to_vec, fpMPolyRingElem, sort_terms
+export HomogeneousPolynomial
+export get_coeffs
+export get_exps
+export exps_matrix
+export nvars
+export convert
+export get_dense_representation
+export get_sparse_representation
+export new_MPolyRingElem
+export gpu_pow
+export pregen_gpu_pow
+export exp_matrix_to_vec
+export fpMPolyRingElem
+export sort_terms
 
 end
 
