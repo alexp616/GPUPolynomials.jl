@@ -39,5 +39,3 @@ export fpMPolyRingElem
 export sort_terms
 
 end
-
-
