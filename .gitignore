@@ -1,3 +1,6 @@
 /Manifest.toml
+/LocalPreferences.toml
 /testing\ files/
 /delta1/
+Dockerfile
+startup.jl

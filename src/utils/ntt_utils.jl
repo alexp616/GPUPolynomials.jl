@@ -179,6 +179,66 @@ function generate_butterfly_permutations(n::Int)::CuVector
     return perm
 end
 
+function butterfly(vec::CuVector)
+    @assert ispow2(length(vec))
+    log2n = Int(log2(length(vec)))
+    kernel1 = @cuda launch=false butterfly_kernel1(vec, log2n)
+    config = launch_configuration(kernel1.fun)
+    threads = min(length(vec) >> 1, config.threads)
+    blocks = cld(length(vec) >> 1, threads)
+
+    kernel1(vec, log2n; threads = threads, blocks = blocks)
+
+    kernel2 = @cuda launch=false butterfly_kernel2(vec, log2n)
+    config = launch_configuration(kernel2.fun)
+    threads = min(length(vec) >> 1, config.threads)
+    blocks = cld(length(vec) >> 1, threads)
+
+    kernel2(vec, log2n; threads = threads, blocks = blocks)
+    display(vec)
+end
+
+function butterfly_kernel1(vec, log2n)
+    idx = threadIdx().x + (blockIdx().x - 1) * blockDim().x - 1
+
+    swapidx = bit_reverse(idx, log2n)
+
+    temp = vec[idx + 1]
+    vec[idx + 1] = vec[swapidx + 1]
+    vec[swapidx + 1] = temp
+
+    return nothing
+end
+
+function butterfly_kernel2(vec, log2n)
+    idx = threadIdx().x + (blockIdx().x - 1) * blockDim().x - 1 + (length(vec) >> 1)
+
+    swapidx = bit_reverse(idx, log2n)
+    if swapidx < length(vec) && idx < length(vec) && swapidx > (length(vec) >> 1)
+        temp = vec[idx + 1]
+        vec[idx + 1] = vec[swapidx + 1]
+        vec[swapidx + 1] = temp
+    end
+
+    return nothing
+end
+
+function test_butterfly_impl(n)
+    len = 2 ^ n
+
+    correctresult = generate_butterfly_permutations(len)
+    experimentalresult = CuArray([i for i in 1:len])
+    butterfly(experimentalresult)
+    A = Array(correctresult)
+    B = Array(experimentalresult)
+    # @assert A == B
+    for i in eachindex(A)
+        if A[i] != B[i]
+            println("A[$i]: $(A[i]), B[$i]: $(B[i])")
+        end
+    end
+end
+
 function find_ntt_primes(n)
     start_time = now()
     prime_list = []
