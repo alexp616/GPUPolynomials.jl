@@ -6,8 +6,6 @@ using FLINT_jll
 using Oscar
 using Primes
 
-include("algorithms/gpu/gpu_ntt_pow.jl")
-
 export GPUNTTPregen
 export gpu_ntt!
 export memorysafe_gpu_ntt!
@@ -20,13 +18,17 @@ export build_result
 export generate_butterfly_permutations
 export memorysafe_gpu_ntt_pow
 
-include("get_oscar_data.jl")
-include("homogeneous_polynomial.jl")
+include("algorithms/gpu/gpu_ntt_pow.jl")
 
-export HomogeneousPolynomial
+
 export get_coeffs
 export get_exps
 export exps_matrix
+
+include("get_oscar_data.jl")
+
+
+export HomogeneousPolynomial
 export nvars
 export convert
 export get_dense_representation
@@ -37,5 +39,7 @@ export pregen_gpu_pow
 export exp_matrix_to_vec
 export fpMPolyRingElem
 export sort_terms
+
+include("homogeneous_polynomial.jl")
 
 end
