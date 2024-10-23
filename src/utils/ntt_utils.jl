@@ -3,14 +3,14 @@ include("get_int_type.jl")
 
 
 @inline function sub_mod(x::Signed, y::Signed, m::Signed)
-    return mod(x - y, m)
+    return unchecked_mod(x - y, m)
 end
 
 @inline function sub_mod(x::Unsigned, y::Unsigned, m::Unsigned)
     if y > x
-        return m - mod(y - x, m)
+        return m - unchecked_mod(y - x, m)
     else
-        return mod(x - y, m)
+        return unchecked_mod(x - y, m)
     end
 end
 
@@ -18,7 +18,7 @@ function crt(vec, pregen)
     x = eltype(pregen)(vec[1])
     # @cuprintln(x)
     for i in axes(pregen, 2)
-        x = mod(x * pregen[2, i] + vec[i + 1] * pregen[1, i], pregen[3, i])
+        x = unchecked_mod(x * pregen[2, i] + vec[i + 1] * pregen[1, i], pregen[3, i])
         # @cuprintln(x)
     end
 
@@ -75,16 +75,15 @@ function extended_gcd_iterative(a::T, b::T) where T<:Signed
     return x0, y0
 end
 
-function power_mod(n::Integer, p::Integer, m::Integer)
+function power_mod(n::T, p::Int, m::T) where T<:Integer
     result = eltype(n)(1)
-    p = mod(p, m - 1)
-    base = mod(n, m)
+    base = unchecked_mod(n, m)
 
     while p > 0
         if p & 1 == 1
-            result = mod((result * base), m)
+            result = unchecked_mod((result * base), m)
         end
-        base = mod(base * base, m)
+        base = unchecked_mod(base * base, m)
         p = p >> 1
     end
 
@@ -128,7 +127,7 @@ function nth_principal_root_of_unity(n::Integer, p::Integer)
     end
 
     root_of_unity = powermod(g, order, p)
-    return typeof(n)(root_of_unity)
+    return typeof(p)(root_of_unity)
 end
 
 function npruarray_generator(primearray::Array{<:Integer}, n)

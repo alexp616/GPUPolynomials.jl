@@ -77,7 +77,6 @@ function cpu_ntt!(stackedvec::Array{T}, pregen::CPUNTTPregen{T}) where T<:Intege
         # theta_m = power_mod.(pregen.npruArray, pregen.len ÷ m, pregen.primeArray)
         theta_m = view(pregen.thetaArray, :, i)
         for idx in 0:lenover2 - 1
-            # k = m * mod(idx, magic) + idx ÷ magic
             k = m * (idx & magicmask) + (idx >> magicbits)
 
             for p in eachindex(pregen.primeArray)
@@ -86,7 +85,7 @@ function cpu_ntt!(stackedvec::Array{T}, pregen::CPUNTTPregen{T}) where T<:Intege
                 t = theta * stackedvec[k + m2 + 1, p]
                 u = stackedvec[k + 1, p]
 
-                stackedvec[k + 1, p] = mod(u + t, pregen.primeArray[p])
+                stackedvec[k + 1, p] = unchecked_mod(u + t, pregen.primeArray[p])
                 stackedvec[k + m2 + 1, p] = sub_mod(u, t, pregen.primeArray[p])
             end
         end

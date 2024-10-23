@@ -49,7 +49,7 @@ function pregen_intt(nttpregen::GPUNTTPregen{T}) where T<:Integer
     return GPUINTTPregen{T}(nttpregen, lenInverseArray)
 end
 
-function generate_theta_m(primeArray, len, log2len, npruArray)
+function generate_theta_m(primeArray::Vector{T}, len, log2len, npruArray::Vector{T}) where T<:Integer
     result = zeros(eltype(primeArray), length(primeArray), log2len)
     for i in 1:log2len
         m = 1 << i
@@ -113,7 +113,7 @@ function single_gpu_ntt_kernel!(vec::CuDeviceVector{T}, prime::T, theta_m, magic
         t = theta * vec[k + m2 + 1]
         u = vec[k + 1]
 
-        vec[k + 1] = mod(u + t, prime)
+        vec[k + 1] = unchecked_mod(u + t, prime)
         vec[k + m2 + 1] = sub_mod(u, t, prime)
     end
 
@@ -129,7 +129,7 @@ function gpu_ntt_kernel!(stackedvec::CuDeviceArray{T}, primeArray::CuDeviceVecto
         t = theta * stackedvec[k + m2 + 1, p]
         u = stackedvec[k + 1, p]
 
-        stackedvec[k + 1, p] = mod(u + t, primeArray[p])
+        stackedvec[k + 1, p] = unchecked_mod(u + t, primeArray[p])
         stackedvec[k + m2 + 1, p] = sub_mod(u, t, primeArray[p])
     end
 
@@ -166,7 +166,7 @@ end
 function single_intt_thing_kernel!(vec, prime, lenInverse)
     idx = threadIdx().x + (blockIdx().x - 1) * blockDim().x
 
-    vec[idx] = mod(vec[idx] * lenInverse, prime)
+    vec[idx] = unchecked_mod(vec[idx] * lenInverse, prime)
 
     return nothing
 end
@@ -175,7 +175,7 @@ function intt_thing_kernel!(stackedvec::CuDeviceArray{T}, primeArray::CuDeviceVe
     idx = threadIdx().x + (blockIdx().x - 1) * blockDim().x
 
     @inbounds for i in eachindex(primeArray)
-        stackedvec[idx, i] = mod(stackedvec[idx, i] * lenInverseArray[i], primeArray[i])
+        stackedvec[idx, i] = unchecked_mod(stackedvec[idx, i] * lenInverseArray[i], primeArray[i])
     end
 
     return nothing
