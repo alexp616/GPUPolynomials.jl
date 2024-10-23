@@ -1,5 +1,7 @@
 module GPUPolynomials
 
+__precompile__(false)
+
 using BitIntegers
 using CUDA
 using FLINT_jll
