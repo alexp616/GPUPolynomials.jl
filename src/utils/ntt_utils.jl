@@ -1,6 +1,4 @@
 include("int128_stuff.jl")
-include("get_int_type.jl")
-
 
 @inline function sub_mod(x::Signed, y::Signed, m::Signed)
     return unchecked_mod(x - y, m)

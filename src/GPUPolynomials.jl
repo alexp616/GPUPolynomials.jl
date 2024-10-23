@@ -6,6 +6,8 @@ using FLINT_jll
 using Oscar
 using Primes
 
+include("utils/get_int_type.jl")
+
 export GPUNTTPregen
 export gpu_ntt!
 export memorysafe_gpu_ntt!

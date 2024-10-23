@@ -3,8 +3,6 @@ using FLINT_jll
 
 import Oscar.fpMPolyRingElem
 
-include("utils/get_int_type.jl")
-
 function get_coeffs(poly::FqMPolyRingElem)
     coeffsDataType = get_uint_type((poly.data.coeffs_alloc ÷ poly.data.length) << 6)
     coeffsPtr = Base.unsafe_convert(Ptr{coeffsDataType}, poly.data.coeffs)
