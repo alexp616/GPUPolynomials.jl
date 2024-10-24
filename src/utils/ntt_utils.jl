@@ -173,7 +173,11 @@ end
 function generate_butterfly_permutations(n::Int)::CuVector
     @assert ispow2(n) "n must be a power of 2"
     perm = parallel_bit_reverse_copy(CuArray([i for i in 1:n]))
-    return perm
+    if n >= 134217728
+        return Array(perm)
+    else 
+        return perm
+    end
 end
 
 function butterfly(vec::CuVector)

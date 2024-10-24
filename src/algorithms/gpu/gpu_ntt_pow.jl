@@ -200,12 +200,14 @@ function pregen_gpu_pow(primeArray::Vector{<:Integer}, fftSize)
     return GPUPowPregen{nttType}(CuArray(nttType.(primeArray)), nttpregen, inttpregen, crtpregen, resultType)
 end
 
-function memorysafe_gpu_ntt_pow(vec::CuVector{<:Integer}, pow::Int; pregen::Union{GPUPowPregen, Nothing} = nothing, docrt = true)
+function memorysafe_gpu_ntt_pow(vec::Vector{<:Integer}, pow::Int; pregen::Union{GPUPowPregen, Nothing} = nothing, docrt = true)
     finalLength = (length(vec) - 1) * pow + 1
 
     if pregen === nothing
         throw(ArgumentError("Default pregeneration has not been implemented yet."))
     end
+
+    @assert pregen.GPUNTTPregen.butterfly isa Vector{Int}
 
     if eltype(vec) != eltype(pregen.nttpregen.primeArray)
         println("Casting vec ($(eltype(vec))) to pregenerated ntt type ($(eltype(pregen.nttpregen.primeArray)))...")
@@ -214,30 +216,40 @@ function memorysafe_gpu_ntt_pow(vec::CuVector{<:Integer}, pow::Int; pregen::Unio
 
     result = zeros(eltype(vec), finalLength, length(pregen.primeArray))
 
-    vec = vcat(vec, zeros(eltype(vec), pregen.nttpregen.len - length(vec)))
-    vec .= vec[pregen.nttpregen.butterfly]
+    # Butterflied input on CPU
+    cpuvec = vcat(vec, zeros(eltype(vec), pregen.nttpregen.len - length(vec)))
+    cpuvec .= cpuvec[pregen.nttpregen.butterfly]
+    cpuvecptr = pointer(cpuvec)
+
     primeArray = Array(pregen.primeArray)
     thetaArray = Array(pregen.nttpregen.thetaArray)
 
     inttthetaArray = Array(pregen.inttpregen.nttpregen.thetaArray)
     inttinverseArray = Array(pregen.inttpregen.lenInverseArray)
 
-    temp = zeros(eltype(vec), finalLength)
+    # Place to store result of broadcast_pow! before butterflying
+    temp = zeros(eltype(vec), pregen.nttpregen.len)
+    tempptr = pointer(temp)
+
+    # Allocate space to do all of our computations on
+    gpuvec = CUDA.zeros(eltype(vec), pregen.nttpregen.len)
+    gpuvecptr = pointer(gpuvec)
     for p in eachindex(primeArray)
-        copyvec = copy(vec)
+        CUDA.unsafe_copyto!(gpuvecptr, cpuvecptr, pregen.nttpregen.len)
         prime = primeArray[p]
         # NTT
-        single_gpu_ntt!(copyvec, prime, view(thetaArray, p, :))
+        single_gpu_ntt!(gpuvec, prime, view(thetaArray, p, :))
         # BROADCAST_POW
-        broadcast_pow!(copyvec, CuArray([prime]), pow)
+        broadcast_pow!(gpuvec, CuArray([prime]), pow)
         # INTT
-        copyvec .= copyvec[pregen.nttpregen.butterfly]
-        single_gpu_intt!(copyvec, prime, view(inttthetaArray, p, :), inttinverseArray[p])
-        # COPY TO RESULT
-        CUDA.copyto!(temp, copyvec[1:finalLength])
-        CUDA.unsafe_free!(copyvec)
+        CUDA.unsafe_copyto!(tempptr, gpuvecptr, pregen.nttpregen.len)
+        # Copy 
+        temp .= temp[pregen.nttpregen.butterfly]
 
-        result[:, p] .= temp
+        CUDA.unsafe_copyto!(gpuvecptr, tempptr, pregen.nttpregen.len)
+        single_gpu_intt!(gpuvec, prime, view(inttthetaArray, p, :), inttinverseArray[p])
+        # COPY TO RESULT
+        CUDA.unsafe_copyto!(pointer(result) + (p - 1) * finalLength * sizeof(eltype(result)), gpuvec, finalLength)
     end
 
     return result

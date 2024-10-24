@@ -1,5 +1,3 @@
-include("../src/GPUPolynomials.jl")
-
 module HomogeneousPolynomialTests
 
 include("randompolynomials.jl")
