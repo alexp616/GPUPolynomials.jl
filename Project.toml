@@ -12,7 +12,7 @@ Primes = "27ebfcd6-29c5-5fa9-bf4b-fb8fc14df3ae"
 
 [compat]
 BitIntegers = "0.3.2"
-CUDA = "5.5.2"
+CUDA = "5.5.1"
 Combinatorics = "1.0.2"
 FLINT_jll = "300.100.300"
 Oscar = "1.1.1"
