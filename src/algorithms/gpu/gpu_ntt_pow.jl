@@ -207,7 +207,7 @@ function memorysafe_gpu_ntt_pow(vec::Vector{<:Integer}, pow::Int; pregen::Union{
         throw(ArgumentError("Default pregeneration has not been implemented yet."))
     end
 
-    @assert pregen.GPUNTTPregen.butterfly isa Vector{Int}
+    @assert pregen.nttpregen.butterfly isa Vector{Int}
 
     if eltype(vec) != eltype(pregen.nttpregen.primeArray)
         println("Casting vec ($(eltype(vec))) to pregenerated ntt type ($(eltype(pregen.nttpregen.primeArray)))...")
