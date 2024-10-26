@@ -170,7 +170,7 @@ function bit_reverse(x::Integer, log2n::Integer)
     return temp
 end
 
-function generate_butterfly_permutations(n::Int)::CuVector
+function generate_butterfly_permutations(n::Int)
     @assert ispow2(n) "n must be a power of 2"
     perm = parallel_bit_reverse_copy(CuArray([i for i in 1:n]))
     if n >= 134217728
