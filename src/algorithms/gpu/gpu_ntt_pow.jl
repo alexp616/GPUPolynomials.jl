@@ -235,18 +235,18 @@ function memorysafe_gpu_ntt_pow(vec::Vector{<:Integer}, pow::Int; pregen::Union{
     gpuvec = CUDA.zeros(eltype(cpuvec), pregen.nttpregen.len)
     gpuvecptr = pointer(gpuvec)
     for p in eachindex(primeArray)
-        CUDA.unsafe_copyto!(gpuvecptr, cpuvecptr, pregen.nttpregen.len)
+        CUDA.copyto!(gpuvec, cpuvec)
         prime = primeArray[p]
         # NTT
         single_gpu_ntt!(gpuvec, prime, view(thetaArray, p, :))
         # BROADCAST_POW
         broadcast_pow!(gpuvec, CuArray([prime]), pow)
         # INTT
-        CUDA.unsafe_copyto!(tempptr, gpuvecptr, pregen.nttpregen.len)
+        CUDA.copyto!(temp, gpuvec)
         # Copy 
         temp .= temp[pregen.nttpregen.butterfly]
 
-        CUDA.unsafe_copyto!(gpuvecptr, tempptr, pregen.nttpregen.len)
+        CUDA.copyto!(gpuvec, temp)
         single_gpu_intt!(gpuvec, prime, view(inttthetaArray, p, :), inttinverseArray[p])
         # COPY TO RESULT
         CUDA.unsafe_copyto!(pointer(result) + (p - 1) * finalLength * sizeof(eltype(result)), gpuvecptr, finalLength)
