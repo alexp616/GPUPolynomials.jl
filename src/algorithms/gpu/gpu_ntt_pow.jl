@@ -6,7 +6,7 @@ mutable struct GPUNTTPregen{T<:Integer}
     thetaArray::CuArray{T}
     len::Int
     log2len::Int
-    butterfly::CuVector{Int}
+    butterfly
 end
 
 mutable struct GPUINTTPregen{T<:Integer}
@@ -228,11 +228,11 @@ function memorysafe_gpu_ntt_pow(vec::Vector{<:Integer}, pow::Int; pregen::Union{
     inttinverseArray = Array(pregen.inttpregen.lenInverseArray)
 
     # Place to store result of broadcast_pow! before butterflying
-    temp = zeros(eltype(vec), pregen.nttpregen.len)
+    temp = zeros(eltype(cpuvec), pregen.nttpregen.len)
     tempptr = pointer(temp)
 
     # Allocate space to do all of our computations on
-    gpuvec = CUDA.zeros(eltype(vec), pregen.nttpregen.len)
+    gpuvec = CUDA.zeros(eltype(cpuvec), pregen.nttpregen.len)
     gpuvecptr = pointer(gpuvec)
     for p in eachindex(primeArray)
         CUDA.unsafe_copyto!(gpuvecptr, cpuvecptr, pregen.nttpregen.len)
@@ -249,8 +249,10 @@ function memorysafe_gpu_ntt_pow(vec::Vector{<:Integer}, pow::Int; pregen::Union{
         CUDA.unsafe_copyto!(gpuvecptr, tempptr, pregen.nttpregen.len)
         single_gpu_intt!(gpuvec, prime, view(inttthetaArray, p, :), inttinverseArray[p])
         # COPY TO RESULT
-        CUDA.unsafe_copyto!(pointer(result) + (p - 1) * finalLength * sizeof(eltype(result)), gpuvec, finalLength)
+        CUDA.unsafe_copyto!(pointer(result) + (p - 1) * finalLength * sizeof(eltype(result)), gpuvecptr, finalLength)
     end
+
+    CUDA.unsafe_free!(gpuvec)
 
     return result
 end
