@@ -181,11 +181,9 @@ function generate_butterfly_permutations(n::Int)
 end
 
 function find_ntt_primes(n)
-    start_time = now()
     prime_list = []
     k = 1
-
-    while (now() - start_time) < Second(5)
+    while length(prime_list) < 10
         candidate = k * n + 1
         if isprime(candidate)
             push!(prime_list, candidate)

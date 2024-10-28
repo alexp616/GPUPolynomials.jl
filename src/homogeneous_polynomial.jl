@@ -112,53 +112,77 @@ function kron_to_bitpacked(idx, numVars, key, totalDegree, bits)
     return resultexp
 end
 
-function pregen_gpu_pow(hp, pow::Int, type)
-    primeArray = UInt.([13631489, 23068673])
-    resultDegree = hp.homogDegree * pow
-    fftsize = Base._nextpow2((resultDegree * (resultDegree + 1) ^ (nvars(hp) - 2)))
-    return pregen_gpu_pow(primeArray, fftsize)
+function get_bound(n, m, pow)
+    n = BigInt(n)
+    m = BigInt(m)
+    return (m - 1) ^ pow * binomial(n * m + n - 1, n - 1) ^ pow
 end
 
+function get_fft_size(homogDegree, n, pow)
+    resultTotalDegree = pow * homogDegree
+    key = resultTotalDegree + 1
+    finalLength = resultTotalDegree * key ^ (n - 2) + 1
 
-function gpu_pow(hp::HomogeneousPolynomial, pow::Int, pregen::GPUPowPregen{T}) where T
+    return Base._nextpow2(finalLength)
+end
+
+function pregen_gpu_pow(hp::HomogeneousPolynomial, pow::Int)
+    @assert hp.poly isa FqMPolyRingElem "Haven't implemented bound finding for ZZPolyRingElem yet"
+    bound = get_bound(nvars(hp), Int(hp.poly.parent.data.n), pow)
+    fftSize = get_fft_size(hp.homogDegree, nvars(hp), pow)
+
+    possiblePrimes = find_ntt_primes(fftSize)
+    primeArray = UInt[]
+    currTotal = BigInt(1)
+    idx = 1
+    while currTotal < bound
+        prime = possiblePrimes[idx]
+        idx += 1
+        currTotal *= prime
+        push!(primeArray, prime)
+    end
+
+    return pregen_gpu_pow(primeArray, fftSize)
+end
+
+function gpu_pow(hp::HomogeneousPolynomial, pow::Int, pregen::GPUPowPregen{T}) where T<:Integer
     resultDegree = hp.homogDegree * pow
     key = (resultDegree) + 1
     len = hp.homogDegree * (key) ^ (nvars(hp) - 2) + 1
-
-    vect = CuArray(get_dense_representation(hp, len, hp.poly.data.bits, T, key))
 
     if pregen === nothing
         throw(ArgumentError("Default pregeneration has not been implemented yet."))
     end
 
-    if eltype(vect) != eltype(pregen.nttpregen.primeArray)
-        println("Casting vec ($(eltype(vect))) to pregenerated ntt type ($(eltype(pregen.nttpregen.primeArray)))...")
-        vect = eltype(pregen.nttpregen.primeArray).(vect)
+    if pregen.nttpregen.butterfly isa Vector
+        vect = get_dense_representation(hp, len, hp.poly.data.bits, T, key)
+        denseMultimodCoeffs = memorysafe_gpu_ntt_pow(vect, pow; pregen = pregen)
+        sparseMultimodCoeffs, encodedDegs = sparsify(denseMultimodCoeffs)
+        resultCoefs = build_result(sparseMultimodCoeffs, pregen.crtpregen, pregen.resultType, true)
+        if hp.poly isa FqMPolyRingElem
+            resultCoefs .%= hp.poly.parent.data.n
+        end
+        resultCoefs = UInt64.(resultCoefs)
+        resultDegs = decode_kronecker_substitution(encodedDegs, key, nvars(hp), resultDegree)
+
+        result = zero(hp.poly.parent)
+        result.data = Oscar.fpMPolyRingElem(hp.poly.parent.data, resultCoefs, resultDegs)
+    else
+        vect = CuArray(get_dense_representation(hp, len, hp.poly.data.bits, T, key))
+        denseMultimodCoeffs = gpu_ntt_pow(vect, pow; pregen = pregen, docrt = false)
+        sparseMultimodCoeffs, encodedDegs = sparsify(denseMultimodCoeffs)
+        resultCoefs = build_result(sparseMultimodCoeffs, pregen.crtpregen, pregen.resultType)
+        resultCoefs = Array(resultCoefs)
+        if hp.poly isa FqMPolyRingElem
+            resultCoefs .%= hp.poly.parent.data.n
+        end
+        resultCoefs = UInt64.(resultCoefs)
+        resultDegs = decode_kronecker_substitution(encodedDegs, key, nvars(hp), resultDegree)
+        
+        result = zero(hp.poly.parent)
+        result.data = Oscar.fpMPolyRingElem(hp.poly.parent.data, resultCoefs, resultDegs)
     end
 
-    multimodvec = repeat(vcat(vect, zeros(eltype(vect), pregen.nttpregen.len - length(vect))), 1, length(pregen.primeArray))
-
-    gpu_ntt!(multimodvec, pregen.nttpregen)
-
-    broadcast_pow!(multimodvec, pregen.nttpregen.primeArray, pow)
-
-    gpu_intt!(multimodvec, pregen.inttpregen)
-
-    crtCoefs, encodedDegs = sparsify(multimodvec)
-    resultCoefs = build_result(crtCoefs, pregen.crtpregen, pregen.resultType)
-
-    if hp.poly isa FqMPolyRingElem
-        resultCoefs .%= hp.poly.parent.data.n
-    end
-
-    resultCoefs = Array(resultCoefs)
-
-    resultDegs = decode_kronecker_substitution(encodedDegs, key, nvars(hp), resultDegree)
-    
-    @assert length(resultCoefs) == size(resultDegs, 2)
-
-    result = zero(hp.poly.parent)
-    result.data = Oscar.fpMPolyRingElem(hp.poly.parent.data, resultCoefs, resultDegs)
     return HomogeneousPolynomial(result, resultDegree)
 end
 
