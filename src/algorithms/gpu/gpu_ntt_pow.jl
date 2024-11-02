@@ -110,10 +110,10 @@ function single_gpu_ntt_kernel!(vec::CuDeviceVector{T}, prime::T, theta_m, magic
 
     @inbounds begin
         theta = power_mod(theta_m, idx >> magicbits, prime)
-        t = theta * vec[k + m2 + 1]
+        t = unchecked_mod(theta * vec[k + m2 + 1], prime)
         u = vec[k + 1]
 
-        vec[k + 1] = unchecked_mod(u + t, prime)
+        vec[k + 1] = add_mod(u, t, prime)
         vec[k + m2 + 1] = sub_mod(u, t, prime)
     end
 
@@ -126,10 +126,10 @@ function gpu_ntt_kernel!(stackedvec::CuDeviceArray{T}, primeArray::CuDeviceVecto
 
     @inbounds for p in eachindex(primeArray)
         theta = power_mod(theta_m[p], idx >> magicbits, primeArray[p])
-        t = theta * stackedvec[k + m2 + 1, p]
+        t = unchecked_mod(theta * stackedvec[k + m2 + 1, p], primeArray[p])
         u = stackedvec[k + 1, p]
 
-        stackedvec[k + 1, p] = unchecked_mod(u + t, primeArray[p])
+        stackedvec[k + 1, p] = add_mod(u, t, primeArray[p])
         stackedvec[k + m2 + 1, p] = sub_mod(u, t, primeArray[p])
     end
 
