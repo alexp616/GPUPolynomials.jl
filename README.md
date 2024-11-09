@@ -6,14 +6,22 @@ The GPUPolynomials.jl package aims to allow users to perform fast polynomial ari
 
 Because GPUPolynomials.jl was developed for the sole purpose of raising multivariate homogeneous polynomials to powers, as used in [MMPSingularities.jl](https://github.com/jjgarzella/MMPSingularities.jl), this is the only functionality implemented for now.
 
-In the future, I (Alex Pan) aim to implement all of the methods of [AbstractAlgebra.jl](https://nemocas.github.io/AbstractAlgebra.jl/stable/mpolynomial/) for univariate and multivariate polynomials, but admittedly, GPU-parallelized algorithms are only suitable for a small subset of sparse multivariate problems, and for many use cases, GPUPolynomials.jl will simply call the implementations already defined in Oscar.jl.
+## Disclaimer
+This package is still in extremely early development, and needs much more work to be usable outside of the specific case I developed it for. Here is a checklist of things I plan to implement:
+
+- More cutting-edge FFT using specific optimal primes, should remove need for pregeneration as well.
+- Polynomial addition/subtraction
+- Polynomial multiplication
+- Polynomial evaluation
+
+The GPU can make significant improvements to polynomial addition/subtraction/evaluation for both dense and sparse cases, but no sparse algorithms (that I know of) when parallelized on the GPU end up being faster than OSCAR.jl's FLINT backend. There are rare cases, (like 4-variate homogeneous polynomial powering), where using a dense algorithm on a sparse problem ends up being faster purely because of the GPU's throughput.
 
 ## Usage
 To import GPUPolynomials, simply do:
 ```
 pkg> add GPUPolynomials
 ```
-As of now, GPUPolynomials requires Julia version 1.11 in order for [BitIntegers.jl](https://github.com/rfourquet/BitIntegers.jl) to work with CUDA.jl.
+As of now, GPUPolynomials requires Julia version 1.11 in order for division and modulo [BitIntegers.jl](https://github.com/rfourquet/BitIntegers.jl) to work with CUDA.jl.
 
 ```
 julia> using GPUPolynomials
