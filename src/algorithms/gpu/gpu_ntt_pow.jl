@@ -219,7 +219,6 @@ function memorysafe_gpu_ntt_pow(vec::Vector{<:Integer}, pow::Int; pregen::Union{
     # Butterflied input on CPU
     cpuvec = vcat(vec, zeros(eltype(vec), pregen.nttpregen.len - length(vec)))
     cpuvec .= cpuvec[pregen.nttpregen.butterfly]
-    cpuvecptr = pointer(cpuvec)
 
     primeArray = Array(pregen.primeArray)
     thetaArray = Array(pregen.nttpregen.thetaArray)
@@ -229,7 +228,6 @@ function memorysafe_gpu_ntt_pow(vec::Vector{<:Integer}, pow::Int; pregen::Union{
 
     # Place to store result of broadcast_pow! before butterflying
     temp = zeros(eltype(cpuvec), pregen.nttpregen.len)
-    tempptr = pointer(temp)
 
     # Allocate space to do all of our computations on
     gpuvec = CUDA.zeros(eltype(cpuvec), pregen.nttpregen.len)
@@ -306,7 +304,6 @@ function build_result(multimodvec, crtpregen, resultType::DataType, cpureturn = 
     # result = CUDA.zeros(eltype(crtpregen), finalLength)
     result = CuArray(zeros(eltype(crtpregen), size(multimodvec, 1)))
     # zerovec = CUDA.zeros(eltype(multimodvec), size(multimodvec, 2))
-
     kernel = @cuda launch=false build_result_kernel!(multimodvec, crtpregen, result)
     config = launch_configuration(kernel.fun)
     threads = min(length(result), config.threads)
@@ -318,13 +315,12 @@ function build_result(multimodvec, crtpregen, resultType::DataType, cpureturn = 
     # result = map(x -> convert(resultType, x), result)
     # return UInt64.(result) # erroring
     if cpureturn
-	cpuresult = Array(result)
-	CUDA.unsafe_free!(result)
-	return resultType.(cpuresult)
+        cpuresult = Array(result)
+        CUDA.unsafe_free!(result)
+	    return resultType.(cpuresult)
     else
-	return resultType.(result)
+	    return resultType.(result)
     end
-    return resultType.(result)
 end
 
 function sparsify(dense::Array)
