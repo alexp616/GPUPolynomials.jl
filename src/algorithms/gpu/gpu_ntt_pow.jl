@@ -200,7 +200,7 @@ function pregen_gpu_pow(primeArray::Vector{<:Integer}, fftSize)
     return GPUPowPregen{nttType}(CuArray(nttType.(primeArray)), nttpregen, inttpregen, crtpregen, resultType)
 end
 
-function memorysafe_gpu_ntt_pow(vec::Vector{<:Integer}, pow::Int; pregen::Union{GPUPowPregen, Nothing} = nothing)
+function memorysafe_gpu_ntt_pow(vec::Vector{<:Integer}, pow::Int; pregen::Union{GPUPowPregen, Nothing} = nothing, docrt = true)
     finalLength = (length(vec) - 1) * pow + 1
 
     if pregen === nothing
