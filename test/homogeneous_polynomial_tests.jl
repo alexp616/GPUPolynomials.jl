@@ -48,7 +48,7 @@ function test_gpu_pow()
     # f = random_homog_poly_mod(p, vars, n)
     f = x^4 + y^4 + z^4 + w^4
     hp = HomogeneousPolynomial(f)
-    gpupregen = pregen_gpu_pow(hp, pow, UInt64)
+    gpupregen = pregen_gpu_pow(hp, pow)
     hp_result = gpu_pow(hp, pow, gpupregen)
 
     g = convert(typeof(f), hp_result)

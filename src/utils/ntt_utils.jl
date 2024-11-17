@@ -6,11 +6,32 @@ end
 
 @inline function sub_mod(x::Unsigned, y::Unsigned, m::Unsigned)
     if y > x
-        return m - unchecked_mod(y - x, m)
+        return (m - y) + x
     else
-        return unchecked_mod(x - y, m)
+        return x - y
     end
 end
+
+@inline function add_mod(x::Signed, y::Signed, m::Signed)
+    result = x + y
+    if result < 0
+        return result + m
+    elseif result >= m
+        return result - m
+    else
+        return result
+    end
+    return
+end
+
+@inline function add_mod(x::Unsigned, y::Unsigned, m::Unsigned)
+    result = x + y
+    return result > m ? result - m : result
+end
+
+# @inline function sub_mod(x::Unsigned, y::Unsigned, m::Unsigned)
+#     return x >= y ? x - y : (m + x) - y
+# end
 
 function crt(vec, pregen)
     x = eltype(pregen)(vec[1])
@@ -181,11 +202,9 @@ function generate_butterfly_permutations(n::Int)
 end
 
 function find_ntt_primes(n)
-    start_time = now()
     prime_list = []
     k = 1
-
-    while (now() - start_time) < Second(5)
+    while length(prime_list) < 10
         candidate = k * n + 1
         if isprime(candidate)
             push!(prime_list, candidate)
