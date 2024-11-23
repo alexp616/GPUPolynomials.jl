@@ -201,7 +201,7 @@ function pregen_gpu_pow(primeArray::Vector{<:Integer}, fftSize)
     return GPUPowPregen{nttType}(CuArray(nttType.(primeArray)), nttpregen, inttpregen, crtpregen, resultType)
 end
 
-function memorysafe_gpu_ntt_pow(vec::Vector{<:Integer}, pow::Int; pregen::Union{GPUPowPregen, Nothing} = nothing)
+function memorysafe_gpu_ntt_pow(vec::Vector{<:Integer}, pow::Int; pregen::Union{GPUPowPregen, Nothing} = nothing, docrt = true)
     finalLength = (length(vec) - 1) * pow + 1
 
     if pregen === nothing
@@ -220,7 +220,6 @@ function memorysafe_gpu_ntt_pow(vec::Vector{<:Integer}, pow::Int; pregen::Union{
     # Butterflied input on CPU
     cpuvec = vcat(vec, zeros(eltype(vec), pregen.nttpregen.len - length(vec)))
     cpuvec .= cpuvec[pregen.nttpregen.butterfly]
-    cpuvecptr = pointer(cpuvec)
 
     primeArray = Array(pregen.primeArray)
     thetaArray = Array(pregen.nttpregen.thetaArray)
@@ -230,7 +229,6 @@ function memorysafe_gpu_ntt_pow(vec::Vector{<:Integer}, pow::Int; pregen::Union{
 
     # Place to store result of broadcast_pow! before butterflying
     temp = zeros(eltype(cpuvec), pregen.nttpregen.len)
-    tempptr = pointer(temp)
 
     # Allocate space to do all of our computations on
     gpuvec = CUDA.zeros(eltype(cpuvec), pregen.nttpregen.len)
@@ -307,6 +305,7 @@ function build_result(multimodvec, crtpregen, resultType::DataType, cpureturn = 
     # result = CUDA.zeros(eltype(crtpregen), finalLength)
     result = CuArray(zeros(eltype(crtpregen), size(multimodvec, 1)))
 
+    # zerovec = CUDA.zeros(eltype(multimodvec), size(multimodvec, 2))
     kernel = @cuda launch=false build_result_kernel!(multimodvec, crtpregen, result)
     config = launch_configuration(kernel.fun)
     threads = min(length(result), config.threads)
