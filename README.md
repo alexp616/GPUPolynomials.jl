@@ -9,12 +9,14 @@ Because GPUPolynomials.jl was developed for the sole purpose of raising multivar
 ## Disclaimer
 This package is still in extremely early development, and needs much more work to be usable outside of the specific case I developed it for. Here is a checklist of things I plan to implement:
 
-- More cutting-edge FFT using specific optimal primes, should remove need for pregeneration as well.
+- More cutting-edge FFT using [specific](https://cp4space.hatsya.com/2021/09/01/an-efficient-prime-for-number-theoretic-transforms/) optimal primes, should remove need for pregeneration as well.
 - Polynomial addition/subtraction
 - Polynomial multiplication
 - Polynomial evaluation
 
-The GPU can make significant improvements to polynomial addition/subtraction/evaluation for both dense and sparse cases, but no sparse algorithms (that I know of) when parallelized on the GPU end up being faster than OSCAR.jl's FLINT backend. There are rare cases, (like 4-variate homogeneous polynomial powering), where using a dense algorithm on a sparse problem ends up being faster purely because of the GPU's throughput.
+The GPU can make significant improvements to polynomial addition/subtraction/evaluation for both dense and sparse cases, but no sparse algorithms (that I know of) when parallelized on the GPU end up being faster than OSCAR.jl's FLINT backend. 
+
+There are rare cases, (like 4-variate homogeneous polynomial powering), where using a dense algorithm on a sparse problem ends up being faster purely because of the GPU's throughput.
 
 ## Usage
 To import GPUPolynomials, simply do:
