@@ -7,6 +7,7 @@ mutable struct GPUNTTPregen{T<:Integer}
     len::Int
     log2len::Int
     butterfly
+    nttType::DataType
 end
 
 mutable struct GPUINTTPregen{T<:Integer}
@@ -24,13 +25,14 @@ function pregen_ntt(primeArray::Vector{<:Integer}, len)
     lenInverseArray = map(p -> mod_inverse(len, p), primeArray)
     @assert all([i > 0 for i in lenInverseArray])
     log2len = Int(log2(len))
+    nttType = get_uint_type(Base._nextpow2(Int(ceil(log2(maximum(primeArray))))))
 
     npruArray = npruarray_generator(primeArray, len)
     # display(npruArray)
     @assert all([i > 0 for i in npruArray])
     thetaArray = generate_theta_m(primeArray, len, log2len, npruArray)
     @assert all([i > 0 for i in thetaArray])
-    nttpregen = GPUNTTPregen{eltype(primeArray)}(CuArray(primeArray), CuArray(npruArray), CuArray(thetaArray), len, log2len, butterfly)
+    nttpregen = GPUNTTPregen{eltype(primeArray)}(CuArray(primeArray), CuArray(npruArray), CuArray(thetaArray), len, log2len, butterfly, nttType)
 
     npruInverseArray = eltype(primeArray).(mod_inverse.(npruArray, primeArray))
     @assert all([i > 0 for i in npruInverseArray])
@@ -38,7 +40,7 @@ function pregen_ntt(primeArray::Vector{<:Integer}, len)
     inverseThetaArray = generate_theta_m(primeArray, len, log2len, npruInverseArray)
     @assert all([i > 0 for i in npruInverseArray])
 
-    temp = GPUNTTPregen{eltype(primeArray)}(CuArray(primeArray), CuArray(npruInverseArray), CuArray(inverseThetaArray), len, log2len, butterfly)
+    temp = GPUNTTPregen{eltype(primeArray)}(CuArray(primeArray), CuArray(npruInverseArray), CuArray(inverseThetaArray), len, log2len, butterfly, nttType)
     inttpregen = pregen_intt(temp)
 
     return nttpregen, inttpregen
@@ -100,7 +102,7 @@ function gpu_ntt!(stackedvec::CuArray{T}, pregen::GPUNTTPregen{T}) where T<:Inte
 
         kernel(stackedvec, pregen.primeArray, theta_m, magicmask, magicbits, m, m2; threads = threads, blocks = blocks)
     end
-
+    
     return nothing
 end
 
@@ -110,7 +112,7 @@ function single_gpu_ntt_kernel!(vec::CuDeviceVector{T}, prime::T, theta_m, magic
 
     @inbounds begin
         theta = power_mod(theta_m, idx >> magicbits, prime)
-        t = unchecked_mod(theta * vec[k + m2 + 1], prime)
+        t = mul_mod(theta, vec[k + m2 + 1], prime)
         u = vec[k + 1]
 
         vec[k + 1] = add_mod(u, t, prime)
@@ -126,7 +128,8 @@ function gpu_ntt_kernel!(stackedvec::CuDeviceArray{T}, primeArray::CuDeviceVecto
 
     @inbounds for p in eachindex(primeArray)
         theta = power_mod(theta_m[p], idx >> magicbits, primeArray[p])
-        t = unchecked_mod(theta * stackedvec[k + m2 + 1, p], primeArray[p])
+        
+        t = mul_mod(theta, stackedvec[k + m2 + 1, p], primeArray[p])
         u = stackedvec[k + 1, p]
 
         stackedvec[k + 1, p] = add_mod(u, t, primeArray[p])
@@ -135,8 +138,6 @@ function gpu_ntt_kernel!(stackedvec::CuDeviceArray{T}, primeArray::CuDeviceVecto
 
     return nothing
 end
-
-
 
 function single_gpu_intt!(vec, prime, thetaArray, lenInverse)
     single_gpu_ntt!(vec, prime, thetaArray)
@@ -166,7 +167,7 @@ end
 function single_intt_thing_kernel!(vec, prime, lenInverse)
     idx = threadIdx().x + (blockIdx().x - 1) * blockDim().x
 
-    vec[idx] = unchecked_mod(vec[idx] * lenInverse, prime)
+    vec[idx] = mul_mod(vec[idx], lenInverse, prime)
 
     return nothing
 end
@@ -175,7 +176,7 @@ function intt_thing_kernel!(stackedvec::CuDeviceArray{T}, primeArray::CuDeviceVe
     idx = threadIdx().x + (blockIdx().x - 1) * blockDim().x
 
     @inbounds for i in eachindex(primeArray)
-        stackedvec[idx, i] = unchecked_mod(stackedvec[idx, i] * lenInverseArray[i], primeArray[i])
+        stackedvec[idx, i] = mul_mod(stackedvec[idx, i], lenInverseArray[i], primeArray[i])
     end
 
     return nothing
@@ -273,7 +274,7 @@ function gpu_ntt_pow(vec::CuVector{<:Integer}, pow::Int; pregen::Union{GPUPowPre
     multimodvec = repeat(vcat(vec, zeros(eltype(vec), pregen.nttpregen.len - length(vec))), 1, length(pregen.primeArray))
 
     gpu_ntt!(multimodvec, pregen.nttpregen)
-
+    # display(multimodvec)
     broadcast_pow!(multimodvec, pregen.nttpregen.primeArray, pow)
 
     gpu_intt!(multimodvec, pregen.inttpregen)
@@ -305,7 +306,6 @@ end
 function build_result(multimodvec, crtpregen, resultType::DataType, cpureturn = false)
     # result = CUDA.zeros(eltype(crtpregen), finalLength)
     result = CuArray(zeros(eltype(crtpregen), size(multimodvec, 1)))
-    # zerovec = CUDA.zeros(eltype(multimodvec), size(multimodvec, 2))
 
     kernel = @cuda launch=false build_result_kernel!(multimodvec, crtpregen, result)
     config = launch_configuration(kernel.fun)
@@ -314,17 +314,13 @@ function build_result(multimodvec, crtpregen, resultType::DataType, cpureturn = 
 
     kernel(multimodvec, crtpregen, result; threads = threads, blocks = blocks)
 
-    # @assert resultType == UInt64
-    # result = map(x -> convert(resultType, x), result)
-    # return UInt64.(result) # erroring
     if cpureturn
-	cpuresult = Array(result)
-	CUDA.unsafe_free!(result)
-	return resultType.(cpuresult)
+        cpuresult = Array(result)
+        CUDA.unsafe_free!(result)
+        return cpuresult
     else
-	return resultType.(result)
+	    return result
     end
-    return resultType.(result)
 end
 
 function sparsify(dense::Array)

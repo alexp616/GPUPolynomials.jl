@@ -3,15 +3,16 @@
 
 Variation of mod that assumes m != 0
 """
-@inline function unchecked_mod(x::T, m::T) where T<:Integer
-    return mod(x, m)
+@inline function unchecked_mod(x::T, m::Integer) where T<:Integer
+    return mod(x, T(m))
 end
 
-@inline function unchecked_div(x::T, m::T) where T<:Integer
-    return div(x, m)
+@inline function unchecked_div(x::T, m::Integer) where T<:Integer
+    return div(x, T(m))
 end
 
-function unchecked_mod(x::UInt128, m::UInt128)
+function unchecked_mod(x::UInt128, m::Integer)
+    m = UInt128(m)
     remainder = UInt128(0)
 
     for i in 0:127
@@ -24,7 +25,8 @@ function unchecked_mod(x::UInt128, m::UInt128)
     return remainder
 end
 
-function unchecked_mod(x::Int128, m::Int128)
+function unchecked_mod(x::Int128, m::Integer)
+    m = Int128(m)
     sign = 1
     if (x < 0) != (m < 0)
         sign = -1

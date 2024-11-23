@@ -5,11 +5,13 @@ include("randompolynomials.jl")
 using ..GPUPolynomials
 using Oscar
 using Test
+using CUDA
 
 function run_tests()
     test_FqMPolyRingElem()
     test_FqMPolyRingElem2()
     test_gpu_pow()
+    # time_gpu_pow()
     test_free_memory()
 end
 
@@ -42,18 +44,35 @@ end
 function test_gpu_pow()
     n = 4
     p = 5
-    pow = 3
+    pow = 6
     R, vars = polynomial_ring(GF(p), n)
-    (x, y, z, w) = vars
-    # f = random_homog_poly_mod(p, vars, n)
-    f = x^4 + y^4 + z^4 + w^4
+    f = random_homog_poly_mod(p, vars, 16)
+
     hp = HomogeneousPolynomial(f)
     gpupregen = pregen_gpu_pow(hp, pow)
-    hp_result = gpu_pow(hp, pow, gpupregen)
+    CUDA.@time hp_result = gpu_pow(hp, pow, gpupregen)
 
     g = convert(typeof(f), hp_result)
-    display(g)
     @test g == f ^ pow
+end
+
+function time_gpu_pow()
+    n = 4
+    p = 5
+    pow = 6
+    R, vars = polynomial_ring(GF(p), n)
+
+    f = random_homog_poly_mod(p, vars, 16)
+    hp = HomogeneousPolynomial(f)
+    gpupregen = pregen_gpu_pow(hp, pow)
+    
+    CUDA.@time hp_result = gpu_pow(hp, pow, gpupregen)
+    for i in 1:10
+        f = random_homog_poly_mod(p, vars, 16)
+        hp = HomogeneousPolynomial(f)
+        
+        CUDA.@time hp_result = gpu_pow(hp, pow, gpupregen)
+    end
 end
 
 function test_free_memory()

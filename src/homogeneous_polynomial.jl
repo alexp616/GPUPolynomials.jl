@@ -203,12 +203,12 @@ function decode_kronecker_substitution_kernel!(encodedDegs::CuDeviceVector, key:
     idx = threadIdx().x + (blockIdx().x - 1) * blockDim().x
     if idx <= length(encodedDegs)
         num = encodedDegs[idx] - 1
-        for i in 1:numVars - 1
+        for i in numVars:-1:2
             num, r = divrem(num, key)
             dest[i, idx] = r
             totalDegree -= r
         end
-        dest[numVars, idx] = totalDegree
+        dest[1, idx] = totalDegree
     end
 
     return nothing

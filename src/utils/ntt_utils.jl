@@ -29,15 +29,44 @@ end
     return result > m ? result - m : result
 end
 
-# @inline function sub_mod(x::Unsigned, y::Unsigned, m::Unsigned)
-#     return x >= y ? x - y : (m + x) - y
-# end
+function mywiden(x)
+    throw(MethodError(mywiden, (typeof(x),)))
+end
+
+macro generate_widen()
+    int_types = [Int8, Int16, Int32, Int64, Int128, Int256, Int512]
+    uint_types = [UInt8, UInt16, UInt32, UInt64, UInt128, UInt256, UInt512]
+
+    widen_methods = quote end
+    for i in 1:length(int_types) - 1
+        push!(widen_methods.args, :(
+            Base.@eval mywiden(x::$(int_types[i])) = $(int_types[i+1])(x)
+        ))
+        push!(widen_methods.args, :(
+            Base.@eval mywiden(x::$(uint_types[i])) = $(uint_types[i+1])(x)
+        ))
+    end
+
+    return widen_methods
+end
+
+@generate_widen()
+
+function mywidemul(x, y)
+    return mywiden(x) * mywiden(y)
+end
+
+@inline function mul_mod(x::T, y::T, m::T) where T<:Unsigned
+    return T(unchecked_mod(mywidemul(x, y), m))
+end
 
 function crt(vec, pregen)
     x = eltype(pregen)(vec[1])
     # @cuprintln(x)
     for i in axes(pregen, 2)
-        x = unchecked_mod(x * pregen[2, i] + vec[i + 1] * pregen[1, i], pregen[3, i])
+        a = mul_mod(x, pregen[2, i], pregen[3, i])
+        b = mul_mod(eltype(pregen)(vec[i + 1]), pregen[1, i], pregen[3, i])
+        x = add_mod(a, b, pregen[3, i])
         # @cuprintln(x)
     end
 
@@ -100,9 +129,9 @@ function power_mod(n::T, p::Int, m::T) where T<:Integer
 
     while p > 0
         if p & 1 == 1
-            result = unchecked_mod((result * base), m)
+            result = mul_mod(result, base, m)
         end
-        base = unchecked_mod(base * base, m)
+        base = mul_mod(base, base, m)
         p = p >> 1
     end
 
@@ -217,22 +246,22 @@ end
 
 function get_types(primeArray::Vector{<:Unsigned})
     max = BigInt(maximum(primeArray))
-    nttType = get_uint_type(Base._nextpow2(Int(ceil(log2(max^2 + 1)))))
+    nttType = get_uint_type(Base._nextpow2(Int(ceil(log2(max + 1)))))
 
     totalprod = prod(BigInt.(primeArray))
-    crtType = get_uint_type(Base._nextpow2(Int(ceil(log2(totalprod^2 + 1)))))
+    crtType = get_uint_type(Base._nextpow2(Int(ceil(log2(totalprod + 1)))))
     resultType = get_uint_type(Base._nextpow2(Int(ceil(log2(totalprod + 1)))))
     
     return nttType, crtType, resultType
 end
 
-function get_types(primeArray::Vector{<:Signed})
-    max = BigInt(maximum(primeArray))
-    nttType = get_int_type(Base._nextpow2(1 + Int(ceil(log2(max^2 + 1)))))
+# function get_types(primeArray::Vector{<:Signed})
+#     max = BigInt(maximum(primeArray))
+#     nttType = get_int_type(Base._nextpow2(1 + Int(ceil(log2(max^2 + 1)))))
 
-    totalprod = prod(BigInt.(primeArray))
-    crtType = get_int_type(Base._nextpow2(1 + Int(ceil(log2(totalprod^2 + 1)))))
-    resultType = get_int_type(Base._nextpow2(1 + Int(ceil(log2(totalprod + 1)))))
+#     totalprod = prod(BigInt.(primeArray))
+#     crtType = get_int_type(Base._nextpow2(1 + Int(ceil(log2(totalprod^2 + 1)))))
+#     resultType = get_int_type(Base._nextpow2(1 + Int(ceil(log2(totalprod + 1)))))
 
-    return nttType, crtType, resultType
-end
+#     return nttType, crtType, resultType
+# end
