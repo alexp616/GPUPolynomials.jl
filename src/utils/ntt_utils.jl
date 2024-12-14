@@ -1,4 +1,5 @@
 include("int128_stuff.jl")
+include("modsqrt.jl")
 
 @inline function sub_mod(x::Signed, y::Signed, m::Signed)
     return unchecked_mod(x - y, m)
@@ -157,7 +158,10 @@ end
 
 function nth_principal_root_of_unity(n::Integer, p::Integer)
     @assert mod(p - 1, n) == 0 "n must divide p-1"
-
+    if ispow2(n)
+        return pow2th_principal_root_of_unity(n, p)
+    end
+    
     order = (p - 1) ÷ n
 
     function is_primitive_root(g, p, order)
@@ -176,6 +180,18 @@ function nth_principal_root_of_unity(n::Integer, p::Integer)
 
     root_of_unity = powermod(g, order, p)
     return typeof(p)(root_of_unity)
+end
+
+function pow2th_principal_root_of_unity(n::Integer, p::Integer)
+    rootofunity = p - 1
+    s = 2
+
+    while s != n
+        s <<= 1
+        rootofunity = modsqrt(rootofunity, p)
+    end
+
+    return rootofunity
 end
 
 function npruarray_generator(primearray::Array{<:Integer}, n)
