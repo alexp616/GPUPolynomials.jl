@@ -1,16 +1,9 @@
-"""
-    unchecked_mod(x::T, m::T) where T<:Integer
-
-Variation of mod that assumes m != 0
-"""
-@inline function unchecked_mod(x::T, m::Integer) where T<:Integer
-    return mod(x, T(m))
-end
-
-@inline function unchecked_div(x::T, m::Integer) where T<:Integer
-    return div(x, T(m))
-end
-
+# Need this file because "Int128 isn’t natively supported, and 
+# LLVM relies on intrinsics for many operations. We don’t currently 
+# have these intrinsics (implemented or linked in from another 
+# library), resulting in the error you encountered.
+# (https://discourse.julialang.org/t/division-for-int128-not-defined-on-gpu/62797)
+# And I don't understand enough about compilers yet to solve that.
 function unchecked_mod(x::UInt128, m::Integer)
     m = UInt128(m)
     remainder = UInt128(0)

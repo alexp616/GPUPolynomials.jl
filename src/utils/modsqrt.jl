@@ -1,4 +1,4 @@
-function legendre_symbol(a, p)
+function legendre_symbol(a::T, p::T) where T<:Integer
     ls = powermod(a, (p - 1) ÷ 2, p)
     if ls == p - 1 
         return -1
@@ -7,7 +7,7 @@ function legendre_symbol(a, p)
     end
 end
 
-function modsqrt(a, p)
+function modsqrt(a::T, p::T) where T<:Integer
     if legendre_symbol(a, p) != 1
         return 0
     elseif a == 0
@@ -25,9 +25,13 @@ function modsqrt(a, p)
         e += 1
     end
 
-    n = 2
+    n = T(2)
+
     while legendre_symbol(n, p) != -1
-        n += 1
+        n += T(1)
+        if n > p
+            throw("something messed up")
+        end
     end
 
     x = powermod(a, (s + 1) ÷ 2, p)
