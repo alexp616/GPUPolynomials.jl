@@ -3,7 +3,9 @@ struct NTTPowPlan{T<:Integer}
     forwardPlan::NTTPlan{T}
     invPlan::INTTPlan{T}
 
-    function NTTPowPlan(len::Int, pow::Int, prime::T) where T<:Integer
+    function NTTPowPlan(len::Integer, pow::Integer, prime::T) where T<:Integer
+        len = Int(len)
+        pow = Int(pow)
         npru = primitive_nth_root_of_unity(len, prime)
         forwardPlan, invPlan = plan_ntt(len, prime, npru)
 

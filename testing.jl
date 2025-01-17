@@ -1,17 +1,11 @@
-using GPUPolynomials
-using Oscar
+using CUDA
 
 function run()
-    R, (x, y, z) = polynomial_ring(ZZ, 3)
+    arr = CuArray(rand(1:10, (8, 3)))
 
-    f = x + 2*y + 3*z
+    ptr = pointer()
 
-    cu_f = cu(f)
-    display(cu_f)
-
-    back = ZZMPolyRingElem(cu_f)
-
-    display(back)
+    display(arr)
 end
 
 run()
