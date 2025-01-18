@@ -177,12 +177,14 @@ struct GPUPowPlan <: OperationPlan
     key::Int
     len::Int
     nttPowPlans::Vector{NTTPowPlan}
-    # crtplan
+    crtPlan::CuArray
     # memorysafe::Bool
 
     function GPUPowPlan(poly::CuZZMPolyRingElem, pow::Integer)
         if poly.homog
             bound = get_bound(poly.homogDegree, poly.parent.nvars, maximum(poly.coeffs) + 1, pow)
+            resultDataType = get_uint_type(min(Base._nextpow2(Int(ceil(log2(bound)))), 32))
+
             resultTotalDegree = pow * poly.homogDegree
             key = resultTotalDegree + 1
             fftLen = Base._nextpow2(resultTotalDegree * key ^ (poly.parent.nvars - 2) + 1)
@@ -204,7 +206,9 @@ struct GPUPowPlan <: OperationPlan
                 push!(nttPowPlans, nttPowPlan)
             end
 
-            return new{UInt32}(key, fftLen, nttpowplans)
+            crtPlan = plan_crt(resultDataType.(primeArray))
+
+            return new{UInt32}(key, fftLen, nttpowplans, crtPlan)
         else
             throw("")
         end
@@ -223,7 +227,28 @@ function homog_poly_pow(poly::CuZZMPolyRingElem, pow::Integer)
     type = typeof(poly.opPlan.nttPowPlans[1].forwardPlan.p)
     stackedVec = get_dense_representation(poly, poly.opPlan.len, poly.bits, type, poly.opPlan.key, length(poly.opPlan.nttPowPlans))
 
-    
+    currPtr = pointer(stackedVec)
+    for planNum in eachindex(poly.opPlan.nttPowPlans)
+        vec = CUDA.unsafe_wrap(CuVector{type}, currPtr, poly.opPlan.len)
+        ntt_pow(vec, poly.opPlan.nttPowPlans[planNum])
+        currPtr += sizeof(type) * poly.opPlan.len
+    end
+
+    resultUnreducedCoeffs, resultEncodedDegs = sparsify(stackedVec)
+
+    resultCoeffs = build_result(resultUnreducedCoeffs, plan.opPlan.crtPlan)
+
+    bitsNeeded = Int(ceil(log2(poly.homogDegree * pow)))
+    # i dont care anymore
+    wordSize = 64
+    bits = div(wordSize, poly.parent.nvars)
+    while bits < bitsNeeded
+        wordSize *= 2
+        bits = div(wordSize, poly.parent.nvars)
+    end
+    resultDegs = decode_kronecker_substitution(resultEncodedDegs, poly.opPlan.key, poly.parent.nvars, poly.homogDegree * pow)
+
+    return CuZZMPolyRingElem()
 end
 
 function get_dense_representation(poly::CuZZMPolyRingElem, length::Int, bits::Int, type::DataType, key::Int, copies::Int)
