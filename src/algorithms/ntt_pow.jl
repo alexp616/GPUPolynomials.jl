@@ -18,10 +18,30 @@ function ntt_pow(vec, plan::NTTPowPlan{T}) where T<:Integer
     @assert length(vec) == plan.forwardPlan.n
     @assert eltype(vec) == T
 
-    p = plan.forwardPlan.p
     ntt!(vec, plan.forwardPlan)
-    map!(x -> power_mod(x, p, plan.pow), vec, vec)
+    p = plan.forwardPlan.p
+    broadcast_pow!(vec, plan.pow, p)
     intt!(vec, plan.invPlan)
 
     return nothing
 end
+
+function broadcast_pow!(vec::CuVector{T}, pow::Int, m::T) where T<:Integer
+    kernel = @cuda launch=false broadcast_pow_kernel!(vec, pow, m)
+    config = launch_configuration(kernel.fun)
+    threads = min(length(vec), Base._prevpow2(config.threads))
+    blocks = div(length(vec), threads)
+
+    kernel(vec, pow, m; threads = threads, blocks = blocks)
+
+    return nothing
+end
+
+function broadcast_pow_kernel!(vec::CuDeviceVector{T}, pow::Int, m::T) where T<:Integer
+    idx = threadIdx().x + (blockIdx().x - 1) * blockDim().x
+
+    vec[idx] = power_mod(vec[idx], pow, m)
+
+    return nothing
+end
+

@@ -1,8 +1,9 @@
 import Oscar.ZZMPolyRingElem
+import Base: ^, convert
 
 abstract type OperationPlan end
 
-struct CuZZMPolyRingElem{T<:Integer}
+mutable struct CuZZMPolyRingElem{T<:Integer}
     coeffs::CuVector{T}
     exps::CuVector
     bits::Int
@@ -19,7 +20,7 @@ struct CuZZMPolyRingElem{T<:Integer}
         homog, homogDegree = is_homog(poly)
         parent = poly.parent
 
-        return new{eltype(coeffs)}(coeffs, exps, bits, homog, homogDegree, parent, nothing)
+        return new{eltype(coeffs)}(coeffs, exps, bits, homog, homogDegree, parent, EmptyPlan())
     end
 
     function CuZZMPolyRingElem(poly::ZZMPolyRingElem, T::DataType)
@@ -30,7 +31,7 @@ struct CuZZMPolyRingElem{T<:Integer}
         homog, homogDegree = is_homog(poly)
         parent = poly.parent
 
-        return new{eltype(coeffs)}(coeffs, exps, bits, homog, homogDegree, parent, nothing)
+        return new{eltype(coeffs)}(coeffs, exps, bits, homog, homogDegree, parent, EmptyPlan())
     end
 
     function CuZZMPolyRingElem(poly::ZZMPolyRingElem, T::DataType, homogDegree::Int)
@@ -40,7 +41,11 @@ struct CuZZMPolyRingElem{T<:Integer}
         bits = poly.bits
         parent = poly.parent
 
-        return new{eltype(coeffs)}(coeffs, exps, bits, true, homogDegree, parent, nothing)
+        return new{eltype(coeffs)}(coeffs, exps, bits, true, homogDegree, parent, EmptyPlan())
+    end
+
+    function CuZZMPolyRingElem(coeffs::CuVector, exps::CuVector, bits::Int, homog::Bool, homogDegree::Int, parent::ZZMPolyRing, opPlan::OperationPlan)
+        return new{eltype(coeffs)}(coeffs, exps, bits, homog, homogDegree, parent, opPlan)
     end
 end
 
@@ -173,6 +178,10 @@ function get_bound(homogDegree::Integer, numVars::Integer, coeffBound::Integer, 
     return ((coeffBound - 1) * binomial(homogDegree + numVars - 1, numVars - 1)) ^ pow
 end
 
+struct EmptyPlan <: OperationPlan
+
+end
+
 struct GPUPowPlan <: OperationPlan
     key::Int
     len::Int
@@ -183,12 +192,14 @@ struct GPUPowPlan <: OperationPlan
     function GPUPowPlan(poly::CuZZMPolyRingElem, pow::Integer)
         if poly.homog
             bound = get_bound(poly.homogDegree, poly.parent.nvars, maximum(poly.coeffs) + 1, pow)
-            resultDataType = get_uint_type(min(Base._nextpow2(Int(ceil(log2(bound)))), 32))
+            resultDataType = get_uint_type(max(Base._nextpow2(Int(ceil(log2(bound)))), 32))
 
             resultTotalDegree = pow * poly.homogDegree
+            # display("resultTotalDegree: $resultTotalDegree")
             key = resultTotalDegree + 1
+            # display("poly.parent.nvars: $(poly.parent.nvars)")
             fftLen = Base._nextpow2(resultTotalDegree * key ^ (poly.parent.nvars - 2) + 1)
-
+            # display("fftLen: $fftLen")
             possiblePrimes = find_ntt_primes(fftLen)
             primeArray = UInt32[]
             currTotal = BigInt(1)
@@ -208,7 +219,7 @@ struct GPUPowPlan <: OperationPlan
 
             crtPlan = plan_crt(resultDataType.(primeArray))
 
-            return new{UInt32}(key, fftLen, nttpowplans, crtPlan)
+            return new(key, fftLen, nttPowPlans, crtPlan)
         else
             throw("")
         end
@@ -236,7 +247,7 @@ function homog_poly_pow(poly::CuZZMPolyRingElem, pow::Integer)
 
     resultUnreducedCoeffs, resultEncodedDegs = sparsify(stackedVec)
 
-    resultCoeffs = build_result(resultUnreducedCoeffs, plan.opPlan.crtPlan)
+    resultCoeffs = build_result(resultUnreducedCoeffs, poly.opPlan.crtPlan)
 
     bitsNeeded = Int(ceil(log2(poly.homogDegree * pow)))
     # i dont care anymore
@@ -246,14 +257,14 @@ function homog_poly_pow(poly::CuZZMPolyRingElem, pow::Integer)
         wordSize *= 2
         bits = div(wordSize, poly.parent.nvars)
     end
-    resultDegs = decode_kronecker_substitution(resultEncodedDegs, poly.opPlan.key, poly.parent.nvars, poly.homogDegree * pow)
-
-    return CuZZMPolyRingElem()
+    resultDegs = kronecker_to_bitpacked(resultEncodedDegs, poly.opPlan.key, poly.parent.nvars, poly.homogDegree * pow, bits, get_uint_type(wordSize))
+    
+    return CuZZMPolyRingElem(resultCoeffs, resultDegs, bits, true, poly.homogDegree * pow, poly.parent, EmptyPlan())
 end
 
-function get_dense_representation(poly::CuZZMPolyRingElem, length::Int, bits::Int, type::DataType, key::Int, copies::Int)
-    result = zeros(type, length, copies)
-    keyPowers = CuArray([key^i for i in 0:nvars(hp) - 2])
+function get_dense_representation(poly::CuZZMPolyRingElem, len::Int, bits::Int, type::DataType, key::Int, copies::Int)::CuMatrix
+    result = CUDA.zeros(type, len, copies)
+    keyPowers = CuArray([key^i for i in 0:poly.parent.nvars - 2])
 
     kernel = @cuda launch=false get_dense_representation_kernel!(poly.coeffs, poly.exps, bits, keyPowers, result, poly.parent.nvars)
     config = launch_configuration(kernel.fun)
@@ -265,7 +276,7 @@ function get_dense_representation(poly::CuZZMPolyRingElem, length::Int, bits::In
     return result
 end
 
-function get_dense_representation_kernel!(coeffs::CuVector, exps::CuVector, bits, keyPowers, dest, nvars)
+function get_dense_representation_kernel!(coeffs::CuDeviceVector, exps::CuDeviceVector, bits, keyPowers::CuDeviceVector, dest, nvars)
     idx = threadIdx().x + (blockIdx().x - 1) * blockDim().x
     
     if idx <= length(coeffs)
@@ -278,7 +289,7 @@ function get_dense_representation_kernel!(coeffs::CuVector, exps::CuVector, bits
         end
 
         for i in axes(dest, 2)
-            dest[resultIdx] = coeffs[termIdx]
+            dest[resultIdx] = coeffs[idx]
         end
     end
 end

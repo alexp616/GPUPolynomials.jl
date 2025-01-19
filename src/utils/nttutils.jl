@@ -234,7 +234,38 @@ function plan_crt(primeArray::Vector{T}) where T<:Integer
     return T.(result)
 end
 
-function decode_kronecker_substitution(encodedDegs, key, numVars, totalDegree, type)
+function kronecker_to_bitpacked(encodedDegs, key, numVars, totalDegree, bits, resultType)
+    result = CUDA.zeros(resultType, length(encodedDegs))
+
+    kernel = @cuda launch=false kronecker_to_bitpacked_kernel!(encodedDegs, result, key, numVars, totalDegree, bits)
+    config = launch_configuration(kernel.fun)
+    threads = min(length(encodedDegs), config.threads)
+    blocks = cld(length(encodedDegs), threads)
+
+    kernel(encodedDegs, result, key, numVars, totalDegree, bits; threads = threads, blocks = blocks)
+
+    return result
+end
+
+function kronecker_to_bitpacked_kernel!(encodedDegs, result, key, numVars, totalDegree, bits)
+    idx = threadIdx().x + (blockIdx().x - 1) * blockDim().x
+    if idx <= length(encodedDegs)
+        num = encodedDegs[idx] - 1
+        resultExp = zero(eltype(encodedDegs))
+        for i in 0:numVars - 2
+            num, r = divrem(num, key)
+            resultExp += r << (bits * i)
+            totalDegree -= r
+        end
+        resultExp += totalDegree << (bits * (numVars - 1))
+
+        result[idx] = resultExp
+    end
+
+    return nothing
+end
+
+function decode_kronecker_substitution(encodedDegs, key, numVars, totalDegree)
     result = CUDA.zeros(UInt64, numVars, length(encodedDegs))
 
     kernel = @cuda launch=false decode_kronecker_substitution_kernel!(encodedDegs, key, numVars, totalDegree, result)

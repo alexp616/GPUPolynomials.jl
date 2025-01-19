@@ -34,7 +34,7 @@ end
 
 function add_mod(x::Unsigned, y::Unsigned, m::Unsigned)
     result = x + y
-    return result >= m ? result - m : result
+    return (result >= m || result < x) ? result - m : result
 end
 
 function add_mod(x::Signed, y::Signed, m::Signed)

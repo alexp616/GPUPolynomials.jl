@@ -13,6 +13,7 @@ include("algorithms/ntt_pow.jl")
 export CuZZMPolyRingElem
 export cu
 export convert
+export GPUPowPlan
 include("CuZZMPolyRingElem.jl")
 
 end
