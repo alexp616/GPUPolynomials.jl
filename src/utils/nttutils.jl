@@ -194,6 +194,19 @@ function build_result_kernel!(multimodvec, crtpregen, result)
     return nothing
 end
 
+function extended_gcd_iterative(a::T, b::T) where T<:Signed
+    x0, x1 = T(1), T(0)
+    y0, y1 = T(0), T(1)
+    while b != 0
+        q, r = divrem(a, b)
+        a, b = b, r
+        x0, x1 = x1, x0 - q * x1
+        y0, y1 = y1, y0 - q * y1
+    end
+    @assert a == 1 "$a and $b aren't coprime"
+    return x0, y0
+end
+
 function crt(vec, pregen)
     x = eltype(pregen)(vec[1])
     # @cuprintln(x)

@@ -114,16 +114,27 @@ function get_fpRingElem_vector(a::Vector{T}, field::fpField)::Vector{fpFieldElem
 end
 # TODO find fpMPolyRingElem constructors
 function Oscar.fpMPolyRingElem(ctx::fpMPolyRing, a::Vector{T}, b::Matrix{UInt}) where T<:Integer
-    a = get_fpRingElem_vector(a, ctx.base_ring)
+    nonzeroLength = 0
+    for i in eachindex(a)
+        if a[i] != eltype(a)(0)
+            nonzeroLength += 1
+        end
+    end
+    # a = get_fpRingElem_vector(a, ctx.base_ring)
+    a = UInt.(a)
     z = fpMPolyRingElem(ctx)
-    @ccall libflint.fmpz_mpoly_init(z::Ref{fpMPolyRingElem}, ctx::Ref{fpMPolyRing})::Nothing
+
+    ccall((:nmod_mpoly_init2, libflint), Nothing,
+          (Ref{fpMPolyRingElem}, Int, Ref{fpMPolyRing}),
+          z, nonzeroLength, ctx)
     z.parent = ctx
 
     for i in eachindex(a)
         if a[i] != 0
-            @ccall libflint.fmpz_mpoly_push_term_fmpz_ui(z::Ref{fpMPolyRingElem}, a[i]::Ref{fpFieldElem}, pointer(b, (i - 1) * ctx.nvars + 1)::Ptr{UInt}, ctx::Ref{fpMPolyRing})::Nothing
+            @ccall libflint.nmod_mpoly_push_term_ui_ui(z::Ref{fpMPolyRingElem}, a[i]::UInt, pointer(b, (i - 1) * ctx.nvars + 1)::Ptr{UInt}, ctx::Ref{fpMPolyRing})::Nothing
         end
     end
+
 
     sort_terms!(z)
     combine_like_terms!(z)
@@ -207,7 +218,7 @@ function get_dense_representation_kernel!(coeffs::CuDeviceVector, exps::CuDevice
         end
 
         for i in axes(dest, 2)
-            dest[resultIdx] = coeffs[idx]
+            dest[resultIdx, i] = coeffs[idx]
         end
     end
 end

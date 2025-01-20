@@ -241,7 +241,7 @@ function get_dense_representation_kernel!(coeffs::CuDeviceVector, exps::CuDevice
         end
 
         for i in axes(dest, 2)
-            dest[resultIdx] = coeffs[idx]
+            dest[resultIdx, i] = coeffs[idx]
         end
     end
 end
