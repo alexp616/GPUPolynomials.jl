@@ -1,17 +1,15 @@
-import Oscar.ZZMPolyRingElem
-import Base: ^, convert
-import CUDA.cu
+import Oscar.fpMPolyRingElem
 
-mutable struct CuZZMPolyRingElem{T<:Integer}
+mutable struct CufpMPolyRingElem{T<:Integer}
     coeffs::CuVector{T}
     exps::CuVector
     bits::Int
     homog::Bool
     homogDegree::Int
-    parent::ZZMPolyRing
+    parent::fpMPolyRing
     opPlan::OperationPlan
 
-    function CuZZMPolyRingElem(poly::ZZMPolyRingElem)
+    function CufpMPolyRingElem(poly::fpMPolyRingElem)
         coeffs = CuArray(get_coeffs(poly))
         exps = CuArray(get_exps(poly))
 
@@ -22,7 +20,7 @@ mutable struct CuZZMPolyRingElem{T<:Integer}
         return new{eltype(coeffs)}(coeffs, exps, bits, homog, homogDegree, parent, EmptyPlan())
     end
 
-    function CuZZMPolyRingElem(poly::ZZMPolyRingElem, T::DataType)
+    function CufpMPolyRingElem(poly::fpMPolyRingElem, T::DataType)
         coeffs = CuArray(get_coeffs(poly, T))
         exps = CuArray(get_exps(poly))
 
@@ -33,7 +31,7 @@ mutable struct CuZZMPolyRingElem{T<:Integer}
         return new{eltype(coeffs)}(coeffs, exps, bits, homog, homogDegree, parent, EmptyPlan())
     end
 
-    function CuZZMPolyRingElem(poly::ZZMPolyRingElem, T::DataType, homogDegree::Int)
+    function CufpMPolyRingElem(poly::fpMPolyRingElem, T::DataType, homogDegree::Int)
         coeffs = CuArray(get_coeffs(poly, T))
         exps = CuArray(get_exps(poly))
         
@@ -43,17 +41,17 @@ mutable struct CuZZMPolyRingElem{T<:Integer}
         return new{eltype(coeffs)}(coeffs, exps, bits, true, homogDegree, parent, EmptyPlan())
     end
 
-    function CuZZMPolyRingElem(coeffs::CuVector, exps::CuVector, bits::Int, homog::Bool, homogDegree::Int, parent::ZZMPolyRing, opPlan::OperationPlan)
+    function CufpMPolyRingElem(coeffs::CuVector, exps::CuVector, bits::Int, homog::Bool, homogDegree::Int, parent::fpMPolyRing, opPlan::OperationPlan)
         return new{eltype(coeffs)}(coeffs, exps, bits, homog, homogDegree, parent, opPlan)
     end
 end
 
-function Base.convert(::CuZZMPolyRingElem, poly::ZZMPolyRingElem)
-    return CuZZMPolyRingElem(poly)
+function Base.convert(::CufpMPolyRingElem, poly::fpMPolyRingElem)
+    return CufpMPolyRingElem(poly)
 end
 
-function CUDA.cu(poly::ZZMPolyRingElem)
-    return CuZZMPolyRingElem(poly)
+function CUDA.cu(poly::fpMPolyRingElem)
+    return CufpMPolyRingElem(poly)
 end
 
 function is_homog(poly::MPolyRingElem)
@@ -80,19 +78,19 @@ function is_homog(poly::MPolyRingElem)
     return homog, homogDegree
 end
 
-function get_coeffs(poly::ZZMPolyRingElem)
-    maxCoeff = BigInt(maximum(coefficients(poly)))
+function get_coeffs(poly::fpMPolyRingElem)
+    maxCoeff = BigInt(poly.parent.n)
 
     T = get_uint_type(max(64, Int(ceil(log2(maxCoeff)))))
-    return T.(coefficients(poly))
+    return T.(lift.(coefficients(poly)))
 end
 
-function get_coeffs(poly::ZZMPolyRingElem, T::DataType)
+function get_coeffs(poly::fpMPolyRingElem, T::DataType)
     coeffsPtr = Base.unsafe_convert(Ptr{T}, poly.coeffs)
     return unsafe_wrap(Vector{T}, coeffsPtr, poly.length)
 end
 
-function get_exps(poly::ZZMPolyRingElem)
+function get_exps(poly::fpMPolyRingElem)
     T = get_uint_type(Base._nextpow2(poly.bits * poly.parent.nvars))
     expsPtr = Base.unsafe_convert(Ptr{T}, poly.exps)
     expsVec = unsafe_wrap(Vector{T}, expsPtr, poly.length)
@@ -100,29 +98,31 @@ function get_exps(poly::ZZMPolyRingElem)
     return expsVec
 end
 
-function get_ZZRingElem_vector(a::Vector{T})::Vector{ZZRingElem} where T<:Integer
-    result = zeros(ZZRingElem, length(a))
+function get_fpRingElem_vector(a::Vector{T}, field::fpField)::Vector{fpFieldElem} where T<:Integer
+    result = zeros(field, length(a))
     # https://flintlib.org/doc/fmpz.html#c.fmpz
     cutoff = UInt(1) << 62
     for i in eachindex(a)
         if a[i] < cutoff
-            result[i] = ZZRingElem(UInt(a[i]))
+            result[i] = fpFieldElem(UInt(a[i]), field)
         else
-            result[i] = ZZRingElem(BigInt(a[i]))
+            result[i] = fpFieldElem(BigInt(a[i]), field)
         end
     end
 
     return result
 end
-
-function Oscar.ZZMPolyRingElem(ctx::ZZMPolyRing, a::Vector{T}, b::Matrix{UInt}) where T<:Integer
-    a = get_ZZRingElem_vector(a)
-    z = ZZMPolyRingElem(ctx)
-    @ccall libflint.fmpz_mpoly_init2(z::Ref{ZZMPolyRingElem}, length(a)::Int, ctx::Ref{ZZMPolyRing})::Nothing
+# TODO find fpMPolyRingElem constructors
+function Oscar.fpMPolyRingElem(ctx::fpMPolyRing, a::Vector{T}, b::Matrix{UInt}) where T<:Integer
+    a = get_fpRingElem_vector(a, ctx.base_ring)
+    z = fpMPolyRingElem(ctx)
+    @ccall libflint.fmpz_mpoly_init(z::Ref{fpMPolyRingElem}, ctx::Ref{fpMPolyRing})::Nothing
     z.parent = ctx
 
     for i in eachindex(a)
-        @ccall libflint.fmpz_mpoly_push_term_fmpz_ui(z::Ref{ZZMPolyRingElem}, a[i]::Ref{ZZRingElem}, pointer(b, (i - 1) * ctx.nvars + 1)::Ptr{UInt}, ctx::Ref{ZZMPolyRing})::Nothing
+        if a[i] != 0
+            @ccall libflint.fmpz_mpoly_push_term_fmpz_ui(z::Ref{fpMPolyRingElem}, a[i]::Ref{fpFieldElem}, pointer(b, (i - 1) * ctx.nvars + 1)::Ptr{UInt}, ctx::Ref{fpMPolyRing})::Nothing
+        end
     end
 
     sort_terms!(z)
@@ -130,53 +130,18 @@ function Oscar.ZZMPolyRingElem(ctx::ZZMPolyRing, a::Vector{T}, b::Matrix{UInt}) 
     return z
 end
 
-function decode_exps_kernel!(exps::CuDeviceVector{T}, bits::Int, nvars::Int, dest::CuDeviceArray{T}) where T<:Unsigned
-    idx = threadIdx().x + (blockIdx().x - 1) * blockDim().x
-    if idx <= length(exps)
-        curr = exps[idx]
-        mask = (T(1) << bits) - T(1)
-        for i in nvars:-1:1
-            dest[i, idx] = curr & mask
-            curr >>= bits
-        end
-    end
-
-    return nothing
-end
-
-function decode_exps(exps::CuVector{T}, bits::Int, nvars::Int) where T<:Unsigned
-    result = CUDA.zeros(UInt, nvars, length(exps))
-
-    kernel = @cuda launch=false decode_exps_kernel!(exps, bits, nvars, result)
-    config = launch_configuration(kernel.fun)
-    threads = min(length(exps), config.threads)
-    blocks = cld(length(exps), threads)
-
-    kernel(exps, bits, nvars, result; threads = threads, blocks = blocks)
-
-    return result
-end
-
-function Oscar.ZZMPolyRingElem(poly::CuZZMPolyRingElem{T}) where T<:Integer
+function Oscar.fpMPolyRingElem(poly::CufpMPolyRingElem{T}) where T<:Integer
     a = Array(poly.coeffs)
     b = Array(decode_exps(poly.exps, poly.bits, poly.parent.nvars))
 
-    return ZZMPolyRingElem(poly.parent, a, b)
+    return fpMPolyRingElem(poly.parent, a, b)
 end
 
-function Base.convert(::ZZMPolyRingElem, poly::CuZZMPolyRingElem{T}) where T<:Integer
-    return ZZMPolyRingElem(poly)
+function convert(::fpMPolyRingElem, poly::CufpMPolyRingElem{T}) where T<:Integer
+    return fpMPolyRingElem(poly)
 end
 
-function get_bound(homogDegree::Integer, numVars::Integer, coeffBound::Integer, pow::Integer)
-    homogDegree = BigInt(homogDegree)
-    numVars = BigInt(numVars)
-    coeffBound = BigInt(coeffBound)
-    
-    return ((coeffBound - 1) * binomial(homogDegree + numVars - 1, numVars - 1)) ^ pow
-end
-
-function ^(poly::CuZZMPolyRingElem, pow::Integer)
+function ^(poly::CufpMPolyRingElem, pow::Integer)
     @assert poly.opPlan isa GPUPowPlan
     if poly.homog
         return homog_poly_pow(poly, pow)
@@ -186,7 +151,7 @@ function ^(poly::CuZZMPolyRingElem, pow::Integer)
     
 end
 
-function homog_poly_pow(poly::CuZZMPolyRingElem, pow::Integer)
+function homog_poly_pow(poly::CufpMPolyRingElem, pow::Integer)
     type = typeof(poly.opPlan.nttPowPlans[1].forwardPlan.p)
     stackedVec = get_dense_representation(poly, poly.opPlan.len, poly.bits, type, poly.opPlan.key, length(poly.opPlan.nttPowPlans))
 
@@ -200,6 +165,7 @@ function homog_poly_pow(poly::CuZZMPolyRingElem, pow::Integer)
     resultUnreducedCoeffs, resultEncodedDegs = sparsify(stackedVec)
 
     resultCoeffs = build_result(resultUnreducedCoeffs, poly.opPlan.crtPlan)
+    resultCoeffs .%= eltype(poly.parent.n)
 
     bitsNeeded = Int(ceil(log2(poly.homogDegree * pow)))
     # i dont care anymore
@@ -211,10 +177,10 @@ function homog_poly_pow(poly::CuZZMPolyRingElem, pow::Integer)
     end
     resultDegs = kronecker_to_bitpacked(resultEncodedDegs, poly.opPlan.key, poly.parent.nvars, poly.homogDegree * pow, bits, get_uint_type(wordSize))
     
-    return CuZZMPolyRingElem(resultCoeffs, resultDegs, bits, true, poly.homogDegree * pow, poly.parent, EmptyPlan())
+    return CufpMPolyRingElem(resultCoeffs, resultDegs, bits, true, poly.homogDegree * pow, poly.parent, EmptyPlan())
 end
 
-function get_dense_representation(poly::CuZZMPolyRingElem, len::Int, bits::Int, type::DataType, key::Int, copies::Int)::CuMatrix
+function get_dense_representation(poly::CufpMPolyRingElem, len::Int, bits::Int, type::DataType, key::Int, copies::Int)::CuMatrix
     result = CUDA.zeros(type, len, copies)
     keyPowers = CuArray([key^i for i in 0:poly.parent.nvars - 2])
 
@@ -246,7 +212,7 @@ function get_dense_representation_kernel!(coeffs::CuDeviceVector, exps::CuDevice
     end
 end
 
-function GPUPowPlan(poly::CuZZMPolyRingElem, pow::Integer)
+function GPUPowPlan(poly::CufpMPolyRingElem, pow::Integer)
     if poly.homog
         bound = get_bound(poly.homogDegree, poly.parent.nvars, maximum(poly.coeffs) + 1, pow)
         resultDataType = get_uint_type(max(Base._nextpow2(Int(ceil(log2(bound)))), 32))
