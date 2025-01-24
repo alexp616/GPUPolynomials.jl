@@ -54,30 +54,6 @@ function CUDA.cu(poly::fpMPolyRingElem)
     return CufpMPolyRingElem(poly)
 end
 
-function is_homog(poly::MPolyRingElem)
-    expVecs = leading_exponent_vector.(terms(poly))
-    if length(poly) == 0
-        homog = true
-        homogDegree = 0
-    elseif length(poly) == 1
-        homog = true
-        homogDegree = sum(expVecs[1])
-    else
-        deg = sum(expVecs[1])
-        for i in eachindex(expVecs)
-            if sum(expVecs[i]) != deg
-                homog = false
-                homogDegree = -1
-                break
-            end
-        end
-        homog = true
-        homogDegree = deg
-    end
-
-    return homog, homogDegree
-end
-
 function get_coeffs(poly::fpMPolyRingElem)
     maxCoeff = BigInt(poly.parent.n)
 
