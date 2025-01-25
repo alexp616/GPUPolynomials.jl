@@ -70,7 +70,7 @@ end
 
 function find_ntt_primes(len::Int, T = UInt32, num = 10)
     prime_list = []
-    k = fld(typemax(T) >> 1, len)
+    k = fld(typemax(T) >> 2, len)
     while length(prime_list) < num
         candidate = k * len + 1
         if isprime(candidate)
