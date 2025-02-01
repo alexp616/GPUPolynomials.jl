@@ -2,7 +2,7 @@ include("getinttype.jl")
 include("modoperations.jl")
 include("modsqrt.jl")
 
-function intlog2(x::Int64)
+function intlog2(x::Int64)::Int64
     return 64 - leading_zeros(x - 1)
 end
 
@@ -68,8 +68,9 @@ function generate_twiddle_factors(npru::T, p::T, n::Int) where T<:Integer
     return result
 end
 
-function find_ntt_primes(len::Int, T = UInt32, num = 10)
+function find_ntt_primes(len::Int, T = UInt64, num = 10)
     prime_list = []
+    len *= 2
     k = fld(typemax(T) >> 2, len)
     while length(prime_list) < num
         candidate = k * len + 1

@@ -18,15 +18,15 @@ function ntt_pow(vec, plan::NTTPowPlan{T}) where T<:Integer
     @assert length(vec) == plan.forwardPlan.n
     @assert eltype(vec) == T
 
-    ntt!(vec, plan.forwardPlan)
-    p = plan.forwardPlan.p
-    broadcast_pow!(vec, plan.pow, p)
-    intt!(vec, plan.invPlan)
+    ntt!(vec, plan.forwardPlan, true)
+    reducer = plan.forwardPlan.reducer
+    broadcast_pow!(vec, plan.pow, reducer)
+    intt!(vec, plan.invPlan, true)
 
     return nothing
 end
 
-function broadcast_pow!(vec::CuVector{T}, pow::Int, m::T) where T<:Integer
+function broadcast_pow!(vec::CuVector{T}, pow::Int, m::NTTs.Reducer{T}) where T<:Integer
     kernel = @cuda launch=false broadcast_pow_kernel!(vec, pow, m)
     config = launch_configuration(kernel.fun)
     threads = min(length(vec), Base._prevpow2(config.threads))
@@ -37,10 +37,10 @@ function broadcast_pow!(vec::CuVector{T}, pow::Int, m::T) where T<:Integer
     return nothing
 end
 
-function broadcast_pow_kernel!(vec::CuDeviceVector{T}, pow::Int, m::T) where T<:Integer
+function broadcast_pow_kernel!(vec::CuDeviceVector{T}, pow::Int, m::NTTs.Reducer{T}) where T<:Integer
     idx = threadIdx().x + (blockIdx().x - 1) * blockDim().x
 
-    vec[idx] = power_mod(vec[idx], pow, m)
+    vec[idx] = NTTs.power_mod(vec[idx], pow, m)
 
     return nothing
 end

@@ -4,7 +4,7 @@ using CUDA
 
 using .GPUPolynomials
 
-function oscar_benchmarks(homogdeg, expRange = 5:15)
+function oscar_benchmarks(homogdeg)
     deg = homogdeg
     expRange = 5:15
 

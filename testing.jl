@@ -1,14 +1,23 @@
 using CUDA
+using Oscar
+# using GPUPolynomials
+include("src/GPUPolynomials.jl")
 
 function run()
-    arr = CuArray(rand(1:10, (8, 3)))
+    R, (x, y, z, w) = polynomial_ring(ZZ, 4)
+    
+    f = x^16 + 2*y^16 + 3*z^16 + 4*w^16
 
-    ptr = pointer(arr)
-    ptr += sizeof(eltype(arr)) * 8
-    unsafeVec = CUDA.unsafe_wrap(CuVector{Int}, ptr, 8)
+    cu_f = GPUPolynomials.cu(f)
+    plan = GPUPolynomials.GPUPowPlan(cu_f, 5)
+    cu_f.opPlan = plan
 
-    display(arr)
-    display(unsafeVec)
+    result = cu_f ^ 5
+
+    cpu_result = ZZMPolyRingElem(result)
+    actual_result = f ^ 5
+
+    @assert string(cpu_result) == string(actual_result)
 end
 
 run()

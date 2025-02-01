@@ -249,7 +249,7 @@ end
 function GPUPowPlan(poly::CuZZMPolyRingElem, pow::Integer)
     if poly.homog
         bound = get_bound(poly.homogDegree, poly.parent.nvars, maximum(poly.coeffs) + 1, pow)
-        resultDataType = get_uint_type(max(Base._nextpow2(Int(ceil(log2(bound)))), 32))
+        resultDataType = get_uint_type(max(Base._nextpow2(Int(ceil(log2(bound)))), 64))
 
         resultTotalDegree = pow * poly.homogDegree
         # display("resultTotalDegree: $resultTotalDegree")
@@ -258,7 +258,7 @@ function GPUPowPlan(poly::CuZZMPolyRingElem, pow::Integer)
         fftLen = Base._nextpow2(resultTotalDegree * key ^ (poly.parent.nvars - 2) + 1)
         # display("fftLen: $fftLen")
         possiblePrimes = find_ntt_primes(fftLen)
-        primeArray = UInt32[]
+        primeArray = UInt64[]
         currTotal = BigInt(1)
         idx = 1
         while currTotal < bound
