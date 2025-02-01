@@ -412,7 +412,6 @@ function gpufft_benchmarks(expRange = 5:15)
 
     f_hp = cu(f.data)
 
-    # this is here because I don't know how to suppress the print from display(@btime ...)
     for exp in expRange
         
         plan = GPUPolynomials.GPUPowPlan(f_hp, exp)
