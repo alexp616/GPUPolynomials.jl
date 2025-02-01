@@ -164,6 +164,9 @@ end
 
 function build_result(multimodvec, crtpregen, cpureturn = false)
     # result = CUDA.zeros(eltype(crtpregen), finalLength)
+    if size(multimodvec, 2) == 1
+        return vec(multimodvec)
+    end
     result = CuArray(zeros(eltype(crtpregen), size(multimodvec, 1)))
 
     # zerovec = CUDA.zeros(eltype(multimodvec), size(multimodvec, 2))
