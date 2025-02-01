@@ -1,8 +1,9 @@
 include("../src/GPUPolynomials.jl")
-include("../test/randompolynomials.jl")
 using CUDA
 
 using .GPUPolynomials
+using Oscar
+using BenchmarkTools
 
 function oscar_benchmarks(homogdeg)
     deg = homogdeg
@@ -11,7 +12,6 @@ function oscar_benchmarks(homogdeg)
     n = 4
     p = 5
 
-    trials = 10
     R, vars = polynomial_ring(ZZ, n)
 
     println("OSCAR BENCHMARKS: \n")
@@ -217,14 +217,13 @@ function oscar_benchmarks(homogdeg)
     end
 end
 
-function gpufft_benchmarks(homogdeg, expRange = 5:15)
-    deg = homogdeg
+function gpufft_benchmarks(expRange = 5:15)
     expRange = 5:15
+    deg = 16
 
     n = 4
     p = 5
 
-    trials = 10
     R, vars = polynomial_ring(GF(p), n)
 
     println("GPUFFT BENCHMARKS: \n")
@@ -411,24 +410,21 @@ function gpufft_benchmarks(homogdeg, expRange = 5:15)
     3*z^9*w^7 + 4*z^8*w^8 + z^7*w^9 + 3*z^6*w^10 + 4*z^5*w^11 + 4*z^4*w^12 +
     z^3*w^13 + 3*z^2*w^14 + 3*z*w^15 + 3*w^16)
 
+    f_hp = cu(f.data)
+
+    # this is here because I don't know how to suppress the print from display(@btime ...)
     for exp in expRange
-        #f = random_homog_poly_mod(7, vars, deg)
-        f_hp = GPUPolynomials.HomogeneousPolynomial(f)
-        pregen = GPUPolynomials.pregen_gpu_pow(f_hp, exp)
-        g = GPUPolynomials.gpu_pow(f_hp, exp, pregen)
-
-        #totaltime = 0
-        #for i in 1:trials
-            #f = random_homog_poly_mod(7, vars, deg)
-            #f_hp = HomogeneousPolynomial(f)
-            b = CUDA.@timed begin
-                g = GPUPolynomials.gpu_pow(f_hp, exp, pregen)
-            end
-            #totaltime += b.time
-        #end
-        #averagetime = totaltime / trials
-
+        
+        plan = GPUPolynomials.GPUPowPlan(f_hp, exp)
+        f_hp.opPlan = plan
+        
         println("\tRaising $n-variate, $deg-homogeneous polynomial to the $exp:")
-        println("\t\t$(b.time) s")
+        @btime CUDA.@sync $f_hp ^ $exp
+        # b = CUDA.@timed begin
+        #     g = f_hp ^ exp
+        # end
+
+        
+        # println("\t\t$(b.time) s")
     end
 end

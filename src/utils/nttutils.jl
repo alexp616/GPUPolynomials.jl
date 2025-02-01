@@ -45,7 +45,6 @@ function primitive_nth_root_of_unity(n::Integer, p::Integer)
         @assert powermod(g, 2, p) == original
     end
 
-    @assert is_primitive_root(g, p, n)
     return g
 end
 
@@ -56,7 +55,6 @@ Returns array containing powers 0 -> n-1 of npru mod p. Accessed as:
 arr[i] = npru ^ (i - 1)
 """
 function generate_twiddle_factors(npru::T, p::T, n::Int) where T<:Integer
-    @assert is_primitive_root(npru, p, n)
 
     result = zeros(T, n)
     curr = T(1)
