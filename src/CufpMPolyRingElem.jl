@@ -167,6 +167,31 @@ function homog_poly_pow(poly::CufpMPolyRingElem, pow::Integer)
     return CufpMPolyRingElem(resultCoeffs, resultDegs, bits, true, poly.homogDegree * pow, poly.parent, EmptyPlan())
 end
 
+function cpu_get_dense_representation(poly::CufpMPolyRingElem, len::Int, bits::Int, type::DataType, key::Int, copies::Int)
+    dest = zeros(type, len, copies)
+    keyPowers = [key^i for i in 0:poly.parent.nvars - 2]
+
+    coeffs = Array(poly.coeffs)
+    exps = Array(poly.exps)
+
+    mask = (one(eltype(exps)) << bits) - one(eltype(exps))
+    nvars = poly.parent.nvars
+    for idx in eachindex(poly.coeffs)
+        resultIdx = 1
+        deg = exps[idx]
+        for i in 1:nvars - 1
+            resultIdx += (deg & mask) * keyPowers[i]
+            deg >>= bits
+        end
+
+        for i in axes(dest, 2)
+            dest[resultIdx, i] = coeffs[idx]
+        end
+    end
+
+    return dest
+end
+
 function get_dense_representation(poly::CufpMPolyRingElem, len::Int, bits::Int, type::DataType, key::Int, copies::Int)::CuMatrix
     result = CUDA.zeros(type, len, copies)
     keyPowers = CuArray([key^i for i in 0:poly.parent.nvars - 2])
