@@ -102,7 +102,7 @@ function sparsify(dense::Array)
         end
     end
 
-    return CuArray(resultCoeffs), CuArray(resultDegrees)
+    return resultCoeffs, resultDegrees
 end
 
 function sparsify(dense::CuArray)
