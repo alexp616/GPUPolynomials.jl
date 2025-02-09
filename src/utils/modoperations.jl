@@ -47,8 +47,8 @@ function mywiden(x)
 end
 
 macro generate_widen()
-    int_types = [Int8, Int16, Int32, Int64, Int128, Int256, Int512]
-    uint_types = [UInt8, UInt16, UInt32, UInt64, UInt128, UInt256, UInt512]
+    int_types = [Int8, Int16, Int32, Int64, Int128, Int256, Int512, UInt1024]
+    uint_types = [UInt8, UInt16, UInt32, UInt64, UInt128, UInt256, UInt512, UInt1024]
 
     widen_methods = quote end
     for i in 1:length(int_types) - 1
