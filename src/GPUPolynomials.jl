@@ -5,7 +5,7 @@ using CUDA
 using FLINT_jll
 using Oscar
 using Primes
-using NTTs
+using CudaNTTs
 
 include("utils/nttutils.jl")
 include("algorithms/ntt_pow.jl")
