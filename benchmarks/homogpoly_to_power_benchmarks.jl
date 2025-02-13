@@ -5,8 +5,9 @@ using .GPUPolynomials
 using Oscar
 using BenchmarkTools
 
-function oscar_benchmarks(homogdeg)
-    deg = homogdeg
+
+function oscar_benchmarks()
+    deg = 16
     expRange = 5:15
 
     n = 4
@@ -198,21 +199,8 @@ function oscar_benchmarks(homogdeg)
     3*z^9*w^7 + 4*z^8*w^8 + z^7*w^9 + 3*z^6*w^10 + 4*z^5*w^11 + 4*z^4*w^12 +
     z^3*w^13 + 3*z^2*w^14 + 3*z*w^15 + 3*w^16)
     for exp in expRange
-        #f = random_homog_poly_mod(7, vars, deg)
-        g = f ^ exp
-
-        totaltime = 0
-        #for i in 1:trials
-            #f = random_homog_poly_mod(7, vars, deg)
-            b = @timed begin
-                g = f ^ exp
-            end
-            #totaltime += b.time
-        #end
-        #averagetime = totaltime / trials
-
         println("\tRaising $n-variate, $deg-homogeneous polynomial to the $exp:")
-        println("\t\t$(b.time) s")
+        display(@benchmark $f ^ $exp)
         #println("\t\t$averagetime s")
     end
 end
@@ -418,7 +406,7 @@ function gpufft_benchmarks(expRange = 5:15)
         f_hp.opPlan = plan
         
         println("\tRaising $n-variate, $deg-homogeneous polynomial to the $exp:")
-        @btime CUDA.@sync $f_hp ^ $exp
+        display(@benchmark CUDA.@sync $f_hp ^ $exp)
         # b = CUDA.@timed begin
         #     g = f_hp ^ exp
         # end
@@ -427,3 +415,5 @@ function gpufft_benchmarks(expRange = 5:15)
         # println("\t\t$(b.time) s")
     end
 end
+
+# oscar_benchmarks()
