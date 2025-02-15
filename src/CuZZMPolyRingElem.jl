@@ -1,6 +1,4 @@
 import Oscar.ZZMPolyRingElem
-import Base: ^, convert
-import CUDA.cu
 
 mutable struct CuZZMPolyRingElem{T<:Integer}
     coeffs::CuVector{T}

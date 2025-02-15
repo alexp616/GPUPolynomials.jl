@@ -13,17 +13,20 @@ struct NTTPowPlan{T<:Integer}
     end
 end
 
+Base.eltype(::Type{NTTPowPlan{T}}) where T = T
+
 # Assumes vec is already properly padded
-function ntt_pow(vec, plan::NTTPowPlan{T}) where T<:Integer
-    @assert length(vec) == plan.forwardPlan.n
-    @assert eltype(vec) == T
+function ntt_pow!(vect::CuVector{T}, plan::NTTPowPlan{T}) where T<:Integer
+    @assert length(vect) == plan.forwardPlan.n
+    @assert eltype(vect) == T
 
-    ntt!(vec, plan.forwardPlan, true)
     reducer = plan.forwardPlan.reducer
-    broadcast_pow!(vec, plan.pow, reducer)
-    intt!(vec, plan.invPlan, true)
 
-    return nothing
+    ntt!(vect, plan.forwardPlan, true)
+    broadcast_pow!(vect, plan.pow, reducer)
+    intt!(vect, plan.invPlan, true)
+
+    return 
 end
 
 function broadcast_pow!(vec::CuVector{T}, pow::Int, m::CudaNTTs.Reducer{T}) where T<:Integer
@@ -37,7 +40,7 @@ function broadcast_pow!(vec::CuVector{T}, pow::Int, m::CudaNTTs.Reducer{T}) wher
     return nothing
 end
 
-function broadcast_pow_kernel!(vec::CuDeviceVector{T}, pow::Int, m::CudaNTTs.Reducer{T}) where T<:Integer
+@inbounds function broadcast_pow_kernel!(vec::CuDeviceVector{T}, pow::Int, m::CudaNTTs.Reducer{T}) where T<:Integer
     idx = threadIdx().x + (blockIdx().x - 1) * blockDim().x
 
     vec[idx] = CudaNTTs.power_mod(vec[idx], pow, m)
