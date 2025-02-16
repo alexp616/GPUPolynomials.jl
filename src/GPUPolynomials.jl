@@ -2,11 +2,11 @@ module GPUPolynomials
 
 using BitIntegers
 using CUDA
+using Combinatorics
+using CudaNTTs
 using FLINT_jll
 using Oscar
 using Primes
-using CudaNTTs
-using Combinatorics
 
 include("utils/nttutils.jl")
 include("algorithms/ntt_mul.jl")
