@@ -225,7 +225,6 @@ function plan_crt(primeArray::Vector{T}) where T<:Integer
     # I'm doing it in BigInt just to be safe. This is all for
     # the pregeneration step anyways.
     primeArray = BigInt.(primeArray)
-
     result = zeros(BigInt, 3, length(primeArray) - 1)
 
     currmod = primeArray[1]

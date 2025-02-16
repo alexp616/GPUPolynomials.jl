@@ -28,10 +28,12 @@ include("univariate/CuPolyRingElem.jl")
 include("univariate/CuZZPolyRingElem.jl")
 
 export CuZZMPolyRingElem
+export CufpMPolyRingElem
 export MPowPlan
 
 include("multivariate/CuMPolyRingElem.jl")
 include("multivariate/CuZZMPolyRingElem.jl")
+include("multivariate/CufpMPolyRingElem.jl")
 
 # export CufpMPolyRingElem
 # include("CufpMPolyRingElem.jl")

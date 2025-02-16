@@ -6,4 +6,5 @@ using .GPUPolynomials
 @testset "GPUPolynomials.jl" begin
     include("CuZZPolyRingElemTests.jl")
     include("CuZZMPolyRingElemTests.jl")
+    include("CufpMPolyRingElemTests.jl")
 end
