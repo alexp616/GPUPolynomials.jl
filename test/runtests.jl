@@ -1,7 +1,8 @@
 using Test
 using Oscar
-include("../src/GPUPolynomials.jl")
-using .GPUPolynomials
+# include("../src/GPUPolynomials.jl")
+# using .GPUPolynomials
+using GPUPolynomials
 
 @testset "GPUPolynomials.jl" begin
     include("CuZZPolyRingElemTests.jl")

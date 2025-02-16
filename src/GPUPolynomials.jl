@@ -35,9 +35,6 @@ include("multivariate/CuMPolyRingElem.jl")
 include("multivariate/CuZZMPolyRingElem.jl")
 include("multivariate/CufpMPolyRingElem.jl")
 
-# export CufpMPolyRingElem
-# include("CufpMPolyRingElem.jl")
-
 include("random_polynomials.jl")
 
 end
