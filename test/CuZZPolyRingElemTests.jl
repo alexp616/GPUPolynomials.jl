@@ -7,9 +7,9 @@ function add_test()
     cu_f = cu(f)
     cu_g = cu(g)
 
-    cu_c = cu_f + cu_g + 1
+    cu_c = cu_f + cu_g
     c = ZZPolyRingElem(cu_c)
-    expected = f + g + 1
+    expected = f + g
     
     @test c == expected
 end
@@ -46,10 +46,26 @@ function mul_test()
     @test c == expected
 end
 
+function pow_test()
+    R, x = polynomial_ring(ZZ)
+
+    f = 1 + 2*x + 3*x^2
+
+    cu_f = cu(f)
+
+    cu_c = cu_f ^ 10
+    c = ZZPolyRingElem(cu_c)
+
+    expected = f ^ 10
+
+    @test c == expected
+end
+
 function run_tests()
     add_test()
     sub_test()
     mul_test()
+    pow_test()
 end
 
 run_tests()

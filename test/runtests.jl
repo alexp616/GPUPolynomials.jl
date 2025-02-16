@@ -5,4 +5,5 @@ using .GPUPolynomials
 
 @testset "GPUPolynomials.jl" begin
     include("CuZZPolyRingElemTests.jl")
+    include("CuZZMPolyRingElemTests.jl")
 end

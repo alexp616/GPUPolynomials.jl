@@ -2,7 +2,7 @@ struct NTTMulPlan{T<:Integer}
     forwardPlan::NTTPlan{T}
     invPlan::INTTPlan{T}
 
-    function NTTMulPlan(len::Int, prime::T)
+    function NTTMulPlan(len::Int, prime::T) where T<:Integer
         npru = primitive_nth_root_of_unity(len, prime)
         forwardPlan, invPlan = plan_ntt(len, prime, npru)
 
@@ -38,7 +38,7 @@ function componentwise_mul!(vec1::CuVector{T}, vec2::CuVector{T}, reducer::CudaN
     return 
 end
 
-@inbounds function componentwise_mul_kernel!(vec1::CuVector{T}, vec2::CuVector{T}, reducer::CudaNTTs.Reducer{T})
+@inbounds function componentwise_mul_kernel!(vec1::CuDeviceVector{T}, vec2::CuDeviceVector{T}, reducer::CudaNTTs.Reducer{T}) where T<:Integer
     idx = threadIdx().x + (blockIdx().x - 1) * blockDim().x
 
     vec1[idx] = CudaNTTs.mul_mod(vec1[idx], vec2[idx], reducer)

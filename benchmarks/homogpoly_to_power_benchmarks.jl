@@ -201,7 +201,6 @@ function oscar_benchmarks()
     for exp in expRange
         println("\nRaising $n-variate, $deg-homogeneous polynomial to the $exp:")
         display(@benchmark $f ^ $exp)
-        #println("\t\t$averagetime s")
     end
 end
 
@@ -212,7 +211,7 @@ function gpufft_benchmarks(expRange = 5:15)
     n = 4
     p = 5
 
-    R, vars = polynomial_ring(GF(p), n)
+    R, vars = polynomial_ring(ZZ, n)
 
     println("GPUFFT BENCHMARKS: \n")
 
@@ -398,22 +397,15 @@ function gpufft_benchmarks(expRange = 5:15)
     3*z^9*w^7 + 4*z^8*w^8 + z^7*w^9 + 3*z^6*w^10 + 4*z^5*w^11 + 4*z^4*w^12 +
     z^3*w^13 + 3*z^2*w^14 + 3*z*w^15 + 3*w^16)
 
-    f_hp = cu(f.data)
+    f_hp = cu(f)
 
     for exp in expRange
         
-        plan = GPUPolynomials.GPUPowPlan(f_hp, exp)
+        plan = GPUPolynomials.MPowPlan(f_hp, exp)
         f_hp.opPlan = plan
         
         println("\nRaising $n-variate, $deg-homogeneous polynomial to the $exp:")
         display(@benchmark CUDA.@sync $f_hp ^ $exp)
-        # b = CUDA.@timed begin
-        #     g = f_hp ^ exp
-        # end
 
-        
-        # println("\t\t$(b.time) s")
     end
 end
-
-# oscar_benchmarks()

@@ -211,12 +211,10 @@ end
 
 function crt(vec, pregen)
     x = eltype(pregen)(vec[1])
-    # @cuprintln(x)
     for i in axes(pregen, 2)
         a = mul_mod(x, pregen[2, i], pregen[3, i])
         b = mul_mod(eltype(pregen)(vec[i + 1]), pregen[1, i], pregen[3, i])
         x = add_mod(a, b, pregen[3, i])
-        # @cuprintln(x)
     end
 
     return x
@@ -273,7 +271,6 @@ function kronecker_to_bitpacked_kernel!(encodedDegs, result, key, numVars, total
             totalDegree -= r
         end
         resultExp += totalDegree << (bits * (numVars - 1))
-
         result[idx] = resultExp
     end
 

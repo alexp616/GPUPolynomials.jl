@@ -6,31 +6,36 @@ using FLINT_jll
 using Oscar
 using Primes
 using CudaNTTs
+using Combinatorics
 
 include("utils/nttutils.jl")
-include("algorithms/multimod_ntt.jl")
 include("algorithms/ntt_mul.jl")
 include("algorithms/ntt_pow.jl")
+
+include("OperationPlans.jl")
 
 import Base: +, -, ==, *, ^, convert, length, zero, one, eltype
 import CUDA.cu
 
 export CuZZPolyRingElem
-export cu
 export ZZPolyRingElem
-
-include("OperationPlans.jl")
+export cu
+export convert
+export NTTMulPlan
+export NTTPowPlan
 
 include("univariate/CuPolyRingElem.jl")
 include("univariate/CuZZPolyRingElem.jl")
 
-# export CuZZMPolyRingElem
-# export cu
-# export convert
-# export GPUPowPlan
-# include("CuZZMPolyRingElem.jl")
+export CuZZMPolyRingElem
+export MPowPlan
+
+include("multivariate/CuMPolyRingElem.jl")
+include("multivariate/CuZZMPolyRingElem.jl")
 
 # export CufpMPolyRingElem
 # include("CufpMPolyRingElem.jl")
+
+include("random_polynomials.jl")
 
 end
