@@ -101,7 +101,7 @@ function cpu_get_dense_representation(poly::CuMPolyRingElem, len::Int, bits::Int
     for idx in eachindex(poly.coeffs)
         resultIdx = 1
         deg = exps[idx]
-        for i in 1:nvars - 1
+        for i in 1:poly.parent.nvars - 1
             resultIdx += (deg & mask) * keyPowers[i]
             deg >>= bits
         end
