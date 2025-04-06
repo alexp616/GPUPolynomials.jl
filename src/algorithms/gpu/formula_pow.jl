@@ -209,9 +209,8 @@ end
 function test_formula_pow_metal()
     # this is currently broken because metal doesn't support
     # arrays of arrays or any sort of arrays of pointers.
-
-    # Instead of re-architecturing this for now, I think we should
-    # just try to test it on CUDA.
+    # CUDA.jl doesn't do this either, so we'll
+    # need to re-architect this somehow.
     
     n = 5
     d = 4
