@@ -1,10 +1,10 @@
 # GPUPolynomials.jl
 
-## UPDATE
+GPUPolynomials.jl aims to implement fast polynomial arithmetic over finite fields, intended for use in pure-mathematical research at scale. Development so far has followed a paper-centric model, where features are developed as necessary for the papers of the authors. If you would like to use GPUPolynomials.jl in your paper, we welcome new contributors. 
 
-As of 2/15/25, I don't intend to develop GPUPolynomials.jl much further. Being able to perfectly interface with [Oscar.jl](https://github.com/oscar-system/Oscar.jl), which uses FLINT's GMP integers in its backend, is quite complicated - variable-width integers are possible on the GPU, but there isn't a Julia implementation (that I know of) yet. I handle large integers with BitIntegers, which works fine, but on-the-fly bound finding for operations other than powering, selecting primes, etc. isn't the easiest, and would require much more implementation, which I'm currently burned out on, since I've been working on this for the past year and want to move on.
+As of now, the two main exported types are CuZZPolyRingElem, and CuZZMPolyRingElem. CuZZPolyRingElem implements univariate addition, subtraction, multiplication (FFT), and powering (FFT) on the GPU, and CuZZMPolyRingElem implements homogeneous polynomial powering (FFT) on the GPU. GPUPolynomials.jl was developed for this last operation, so it is the most optimized. Non-homogeneous polynomial powering is easier to implement than homogeneous, but we haven't needed it so badly as to justify completely optimizing it.
 
-As of now, the two main exported types are CuZZPolyRingElem, and CuZZMPolyRingElem. CuZZPolyRingElem implements univariate addition, subtraction, multiplication (FFT), and powering (FFT) on the GPU, and CuZZMPolyRingElem implements homogeneous polynomial powering (FFT) on the GPU. GPUPolynomials.jl was developed for this last operation, so it is the most optimized. Non-homogeneous polynomial powering is easier to implement than homogeneous, but again, I want to move on. So, this library more serves as a proof-of-concept of what can be done when the GPU is applied in Computer Algebra.
+One goal of GPUPolynomials.jl is to interface with [Oscar.jl](https://github.com/oscar-system/Oscar.jl), which uses FLINT's GMP integers in its backend. This has not been fully achieved, and is indeed quite complicated - variable-width integers are possible on the GPU, but there isn't a Julia implementation (that we know of) yet. We handle large integers with BitIntegers, which works fine, but on-the-fly bound finding for operations other than powering, selecting primes, etc. isn't the easiest, and would require much more implementation. 
 
 ## Usage
 To add GPUPolynomials, simply do:
