@@ -11,12 +11,6 @@ FLINT_jll = "e134572f-a0d5-539d-bddf-3cad8db41a82"
 Oscar = "f1435218-dba5-11e9-1e4d-f1a5fab5fc13"
 Primes = "27ebfcd6-29c5-5fa9-bf4b-fb8fc14df3ae"
 
-[compat]
-BitIntegers = "0.3.2"
-CUDA = "5.6.1"
-Combinatorics = "1.0.2"
-CudaNTTs = "1.1.1"
-FLINT_jll = "300.100.300"
-Oscar = "1.2"
-Primes = "0.5.6"
-julia = "1.11"
+[workspace]
+projects = ["test"]
+
