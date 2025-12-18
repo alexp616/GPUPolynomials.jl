@@ -135,6 +135,10 @@ function MPowPlan(poly::CufpMPolyRingElem, pow::Integer)
     end
 end
 
+function Oscar.total_degree(p::GPUPolynomials.CufpMPolyRingElem)
+    return p.homogDegree
+end
+
 function Base.:^(a::CufpMPolyRingElem, pow::Integer)
     pow %= a.parent.n
     if !(a.opPlan isa MPowPlan)

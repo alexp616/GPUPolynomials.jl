@@ -16,6 +16,7 @@ include("OperationPlans.jl")
 
 import Base: +, -, ==, *, ^, convert, length, zero, one, eltype
 import CUDA.cu
+import Oscar: total_degree
 
 export CuZZPolyRingElem
 export ZZPolyRingElem
@@ -23,6 +24,7 @@ export cu
 export convert
 export NTTMulPlan
 export NTTPowPlan
+export total_degree
 
 include("univariate/CuPolyRingElem.jl")
 include("univariate/CuZZPolyRingElem.jl")

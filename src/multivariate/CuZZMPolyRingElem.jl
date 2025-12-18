@@ -119,6 +119,10 @@ function MPowPlan(poly::CuZZMPolyRingElem, pow::Integer)
     end
 end
 
+function total_degree(p::GPUPolynomials.CuZZMPolyRingElem)
+    return p.homogDegree
+end
+
 function Base.:^(a::CuZZMPolyRingElem, p::Integer)
     if !(a.opPlan isa MPowPlan)
         a.opPlan = MPowPlan(a, p)
