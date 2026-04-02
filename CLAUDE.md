@@ -32,5 +32,4 @@ All types store coefficients and exponents on the GPU as `CuVector`. Operation p
 ## Limitations
 
 - Only homogeneous multivariate polynomials are supported; non-homogeneous inputs throw immediately.
-- CUDA backend only (Metal path is broken).
 - 128-bit division on GPU is slow — CUDA lacks the `__modti3` intrinsic, so `src/utils/int128.jl` uses bit-by-bit long division for `UInt128`/`Int128`.

@@ -5,6 +5,7 @@ using CUDA
 using Combinatorics
 using CudaNTTs
 using FLINT_jll
+using KernelAbstractions
 using Oscar
 using Primes
 
@@ -38,5 +39,11 @@ include("multivariate/CuZZMPolyRingElem.jl")
 include("multivariate/CufpMPolyRingElem.jl")
 
 include("random_polynomials.jl")
+
+include("algorithms/gpu/formula_pow.jl")
+
+export formula_pow_plan
+export formula_pow
+export FormulaPowPlan
 
 end

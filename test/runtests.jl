@@ -8,4 +8,5 @@ using GPUPolynomials
     include("CuZZPolyRingElemTests.jl")
     include("CuZZMPolyRingElemTests.jl")
     include("CufpMPolyRingElemTests.jl")
+    include("FormulaPowTests.jl")
 end
