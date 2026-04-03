@@ -1,4 +1,6 @@
 [deps]
+CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
 GPUPolynomials = "cd56b521-fb58-49b4-80c2-43283f39a4e1"
 Oscar = "f1435218-dba5-11e9-1e4d-f1a5fab5fc13"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"

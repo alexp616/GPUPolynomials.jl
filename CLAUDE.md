@@ -17,7 +17,7 @@ NTT primes are chosen so their product exceeds a tight coefficient bound derived
 
 - `CuZZPolyRingElem` — univariate polynomial over ZZ
 - `CuZZMPolyRingElem` — multivariate polynomial over ZZ
-- `CufpMPolyRingElem` — multivariate polynomial over a finite field GF(p)
+- `CufpMPolyRingElem` — multivariate polynomial over a finite field GF(p) for prime p
 
 All types store coefficients and exponents on the GPU as `CuVector`. Operation plans (`MulPlan`, `PowPlan`, `MPowPlan`) are lazily cached on first use and can be pre-built for hot paths.
 
@@ -33,4 +33,3 @@ All types store coefficients and exponents on the GPU as `CuVector`. Operation p
 
 - Only homogeneous multivariate polynomials are supported; non-homogeneous inputs throw immediately.
 - CUDA backend only (Metal path is broken).
-- 128-bit division on GPU is slow — CUDA lacks the `__modti3` intrinsic, so `src/utils/int128.jl` uses bit-by-bit long division for `UInt128`/`Int128`.
