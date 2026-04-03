@@ -43,3 +43,16 @@ display(@benchmark CUDA.@sync $cu_f ^ $pow) # 4 ms
 ```
 
 The full potential of GPUPolynomials.jl is obtained when performing many "similar" computations. This means same polynomial degree, same bound on coefficients, same number of variables. Then, a plan can be cached in the `opPlan` field of the polynomial, containing all needed information.
+
+## Challenges
+
+There are some nontrivial problems we ran into that we either worked around or just avoided. For future work, we describe them here:
+
+- Underlying polynomial representation of FLINT is complicated, and hard to correctly convert to from the GPU polynomial representation we implement here. Here is a list of things to worry about:
+    - Monomial ordering
+    - Getting rid of zero terms
+    - Combining like terms
+    - Probably many more
+This makes testing for equality hard - we solve this by sorting terms, converting to a string, and testing for string equality. The bigger issue is that an Oscar polynomial we output when converting to it is invalid, meaning Oscar and FLINT's algorithms may not necessarily work with it. Fixing this requires very deep knowledge of FLINT and Oscar's inner workings.
+
+- (Multivariate/sparse) polynomial addition/subtraction hasn't been implemented. The algorithm for this is a sort, a [`merge_by_key()`](https://nvidia.github.io/cccl/unstable/thrust/api/group__merging_1gac87a13a242f94abbee8dc53131682eed.html) for the addition, then a [`reduce_by_key()`](https://nvidia.github.io/cccl/unstable/thrust/api/group__reductions_1gab66d365f9a531bb5b99615ac3e836f8f.html) for combining like terms. We can either implement these in Julia via CUDA.jl or KernelAbstractions (very difficult), or write wrappers for them in C to call from Julia. However, we need these to work with wide integer types, if coefficients are Int128/256/512...

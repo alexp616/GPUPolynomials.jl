@@ -34,6 +34,8 @@ function is_homog(poly::MPolyRingElem)
         homogDegree = sum(expVecs[1])
     else
         deg = sum(expVecs[1])
+        homog = true
+        homogDegree = deg
         for i in eachindex(expVecs)
             if sum(expVecs[i]) != deg
                 homog = false
@@ -41,8 +43,6 @@ function is_homog(poly::MPolyRingElem)
                 break
             end
         end
-        homog = true
-        homogDegree = deg
     end
 
     return homog, homogDegree

@@ -42,41 +42,18 @@ function add_mod(x::Signed, y::Signed, m::Signed)
     return result >= m ? result - m : result
 end
 
-function mywiden(x)
-    throw(MethodError(mywiden, (typeof(x),)))
-end
-
-macro generate_widen()
-    int_types = [Int8, Int16, Int32, Int64, Int128, Int256, Int512, UInt1024]
-    uint_types = [UInt8, UInt16, UInt32, UInt64, UInt128, UInt256, UInt512, UInt1024]
-
-    widen_methods = quote end
-    for i in 1:length(int_types) - 1
-        push!(widen_methods.args, :(
-            Base.@eval mywiden(x::$(int_types[i])) = $(int_types[i+1])(x)
-        ))
-        push!(widen_methods.args, :(
-            Base.@eval mywiden(x::$(uint_types[i])) = $(uint_types[i+1])(x)
-        ))
-    end
-
-    return widen_methods
-end
-
-@generate_widen()
-
-"""
-    mywidemul(x::T, y::T) where T<:Integer
-
-Exists because Base.widen() widens Int128 to BigInt, which 
-CUDA doesn't like.
-"""
-function mywidemul(x::T, y::T) where T<:Integer
-    return mywiden(x) * mywiden(y)
+# Extend Base.widemul for types where Base.widen returns BigInt (which
+# CUDA can't handle). For Int128/UInt128 we widen to Int256/UInt256
+# from BitIntegers.jl; for the BitIntegers types we continue the chain.
+# This is technically type piracy for Int128/UInt128, but the change is
+# benign — Int256 is a correct widened product, just a different type.
+for (T, W) in ((Int128, Int256), (UInt128, UInt256),
+               (Int256, Int512), (UInt256, UInt512))
+    @eval Base.widemul(x::$T, y::$T) = $(W)(x) * $(W)(y)
 end
 
 function mul_mod(x::T, y::T, m::T) where T<:Integer
-    return T(unchecked_mod(mywidemul(x, y), m))
+    return T(unchecked_mod(widemul(x, y), m))
 end
 
 function mul_mod(x::BigInt, y::BigInt, m::BigInt)

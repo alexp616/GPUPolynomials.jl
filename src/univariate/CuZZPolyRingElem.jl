@@ -72,7 +72,7 @@ function Base.:-(a::CuZZPolyRingElem, b::CuZZPolyRingElem)
 end
 
 function Base.:-(a::CuZZPolyRingElem, b::Integer)
-    coeffs = copy(a)
+    coeffs = copy(a.coeffs)
     CUDA.@allowscalar coeffs[1] -= b
     return CuZZPolyRingElem(coeffs, length(a), a.parent, EmptyPlan())
 end
