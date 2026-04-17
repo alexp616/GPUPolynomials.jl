@@ -117,4 +117,10 @@ run_case(4, 4, 2)
 # Hybrid short+long path for formula_pow
 run_case(4, 4, 6)
 
+# More variables, higher degree (original = 126 elements)
+run_case(5, 5, 2)
+
+# Higher degree input (original = 165 elements)
+run_case(4, 8, 3)
+
 println()

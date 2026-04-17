@@ -102,6 +102,40 @@ if CUDA.functional()
             gpu_result = output_to_oscar_poly(Array(output), n_vars, d * pow)
             @test gpu_result == oscar_result
         end
+
+        @testset "CUDA (pow=2, n_vars=5, d=5)" begin
+            n_vars = 5; d = 5; pow = 2
+            n = binomial(n_vars + d - 1, d)
+            coeffs = collect(Int64, 1:n)
+
+            _, oscar_result = build_oscar_poly_and_power(n_vars, d, pow, coeffs)
+
+            backend = CUDABackend()
+            plan = formula_pow_plan(n_vars, d, pow, backend)
+
+            original = CUDA.CuArray(coeffs)
+            output = formula_pow(original, plan, backend)
+
+            gpu_result = output_to_oscar_poly(Array(output), n_vars, d * pow)
+            @test gpu_result == oscar_result
+        end
+
+        @testset "CUDA (pow=3, n_vars=4, d=8)" begin
+            n_vars = 4; d = 8; pow = 3
+            n = binomial(n_vars + d - 1, d)
+            coeffs = collect(Int64, 1:n)
+
+            _, oscar_result = build_oscar_poly_and_power(n_vars, d, pow, coeffs)
+
+            backend = CUDABackend()
+            plan = formula_pow_plan(n_vars, d, pow, backend)
+
+            original = CUDA.CuArray(coeffs)
+            output = formula_pow(original, plan, backend)
+
+            gpu_result = output_to_oscar_poly(Array(output), n_vars, d * pow)
+            @test gpu_result == oscar_result
+        end
     end
 else
     @info "Skipping CUDA formula_pow tests (no CUDA device)"
@@ -188,6 +222,40 @@ end
         # pow=6 should trigger long rows (max ~12652 terms per bead description)
         @test !isempty(plan.long_rows)
         @test !isempty(plan.short_rows)
+
+        original = collect(Int, coeffs)
+        output = formula_pow(original, plan, backend)
+
+        gpu_result = output_to_oscar_poly(output, n_vars, d * pow)
+        @test gpu_result == oscar_result
+    end
+
+    @testset "CPU (pow=2, n_vars=5, d=5)" begin
+        n_vars = 5; d = 5; pow = 2
+        n = binomial(n_vars + d - 1, d)
+        coeffs = collect(1:n)
+
+        _, oscar_result = build_oscar_poly_and_power(n_vars, d, pow, coeffs)
+
+        backend = KernelAbstractions.CPU()
+        plan = formula_pow_plan(n_vars, d, pow, backend)
+
+        original = collect(Int, coeffs)
+        output = formula_pow(original, plan, backend)
+
+        gpu_result = output_to_oscar_poly(output, n_vars, d * pow)
+        @test gpu_result == oscar_result
+    end
+
+    @testset "CPU (pow=3, n_vars=4, d=8)" begin
+        n_vars = 4; d = 8; pow = 3
+        n = binomial(n_vars + d - 1, d)
+        coeffs = collect(1:n)
+
+        _, oscar_result = build_oscar_poly_and_power(n_vars, d, pow, coeffs)
+
+        backend = KernelAbstractions.CPU()
+        plan = formula_pow_plan(n_vars, d, pow, backend)
 
         original = collect(Int, coeffs)
         output = formula_pow(original, plan, backend)

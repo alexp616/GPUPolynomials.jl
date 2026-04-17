@@ -8,10 +8,10 @@ using Combinatorics
 const _formula_pow_cache = Dict{Tuple{Int,Int,Int},
     NamedTuple{(:term_ptr, :term_coeffs, :monomial_ptr,
                 :monomial_indices, :monomial_degrees,
-                :short_rows_cpu, :long_rows_cpu),
+                :short_rows_cpu, :medium_rows_cpu, :long_rows_cpu),
                Tuple{Vector{Int32}, Vector{Int}, Vector{Int32},
                      Vector{Int32}, Vector{Int32},
-                     Vector{Int32}, Vector{Int32}}}}()
+                     Vector{Int32}, Vector{Int32}, Vector{Int32}}}}()
 
 # =============================================================================
 # generic_power_formula  (bead 9rr.1)
@@ -64,8 +64,10 @@ struct FormulaPowPlan{V32<:AbstractVector{Int32}, VI<:AbstractVector{Int}}
     monomial_indices::V32
     monomial_degrees::V32
     short_rows::V32
+    medium_rows::V32
     long_rows::V32
     workgroup_size::Int
+    medium_workgroup_size::Int
 end
 
 # =============================================================================
@@ -174,7 +176,8 @@ end
 # original[i] must be the coefficient of the i-th monomial in
 # with_replacement_combinations(1:n_vars, d) order.
 function formula_pow_plan(n_vars::Int, d::Int, pow::Int, backend;
-                          workgroup_size::Int = 256)
+                          workgroup_size::Int = 256,
+                          medium_workgroup_size::Int = 32)
     key = (n_vars, d, pow)
 
     # Compute (or retrieve from cache) the CPU-side CSR arrays.
@@ -186,16 +189,18 @@ function formula_pow_plan(n_vars::Int, d::Int, pow::Int, backend;
 
         num_rows    = length(tp) - 1
         row_lengths = [tp[i+1] - tp[i] for i in 1:num_rows]
-        short_rows  = Int32[i for i in 1:num_rows if row_lengths[i] < workgroup_size]
+        short_rows  = Int32[i for i in 1:num_rows if row_lengths[i] < medium_workgroup_size]
+        medium_rows = Int32[i for i in 1:num_rows if medium_workgroup_size <= row_lengths[i] < workgroup_size]
         long_rows   = Int32[i for i in 1:num_rows if row_lengths[i] >= workgroup_size]
 
-        (term_ptr       = tp,
-         term_coeffs    = tc,
-         monomial_ptr   = mp,
+        (term_ptr        = tp,
+         term_coeffs     = tc,
+         monomial_ptr    = mp,
          monomial_indices = mi,
          monomial_degrees = md,
-         short_rows_cpu = short_rows,
-         long_rows_cpu  = long_rows)
+         short_rows_cpu  = short_rows,
+         medium_rows_cpu = medium_rows,
+         long_rows_cpu   = long_rows)
     end
 
     return FormulaPowPlan(
@@ -205,8 +210,10 @@ function formula_pow_plan(n_vars::Int, d::Int, pow::Int, backend;
         Adapt.adapt(backend, cached.monomial_indices),
         Adapt.adapt(backend, cached.monomial_degrees),
         Adapt.adapt(backend, cached.short_rows_cpu),
+        Adapt.adapt(backend, cached.medium_rows_cpu),
         Adapt.adapt(backend, cached.long_rows_cpu),
         workgroup_size,
+        medium_workgroup_size,
     )
 end
 
@@ -325,10 +332,11 @@ function formula_pow(original, plan::FormulaPowPlan, backend)
     num_out = length(plan.term_ptr) - 1
     output  = KernelAbstractions.zeros(backend, eltype(original), num_out)
 
-    WS = plan.workgroup_size
+    WS_M = plan.medium_workgroup_size
+    WS_L = plan.workgroup_size
 
     if !isempty(plan.short_rows)
-        kernel = formula_pow_short_kernel!(backend, WS)
+        kernel = formula_pow_short_kernel!(backend, WS_M)
         kernel(output, original,
                plan.term_ptr, plan.term_coeffs,
                plan.monomial_ptr, plan.monomial_indices, plan.monomial_degrees,
@@ -336,13 +344,22 @@ function formula_pow(original, plan::FormulaPowPlan, backend)
                ndrange = length(plan.short_rows))
     end
 
-    if !isempty(plan.long_rows)
-        kernel = formula_pow_long_kernel!(backend, WS)
+    if !isempty(plan.medium_rows)
+        kernel = formula_pow_long_kernel!(backend, WS_M)
         kernel(output, original,
                plan.term_ptr, plan.term_coeffs,
                plan.monomial_ptr, plan.monomial_indices, plan.monomial_degrees,
-               plan.long_rows, Val(WS);
-               ndrange = WS * length(plan.long_rows))
+               plan.medium_rows, Val(WS_M);
+               ndrange = WS_M * length(plan.medium_rows))
+    end
+
+    if !isempty(plan.long_rows)
+        kernel = formula_pow_long_kernel!(backend, WS_L)
+        kernel(output, original,
+               plan.term_ptr, plan.term_coeffs,
+               plan.monomial_ptr, plan.monomial_indices, plan.monomial_degrees,
+               plan.long_rows, Val(WS_L);
+               ndrange = WS_L * length(plan.long_rows))
     end
 
     KernelAbstractions.synchronize(backend)
