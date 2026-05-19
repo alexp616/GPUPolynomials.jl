@@ -85,4 +85,9 @@ run_case(4, 4, 2, Int64)
 # Hybrid path (both short and long rows fire)
 run_case(4, 4, 6, Int64)
 
+# Matches the (5,5,2) and (4,8,3) cases covered by formula_pow_vs_ntt_bench.jl
+# so cross-backend regressions get caught on all four tracked tuples.
+run_case(5, 5, 2, Int64)
+run_case(4, 8, 3, Int64)
+
 println()
