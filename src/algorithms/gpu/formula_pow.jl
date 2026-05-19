@@ -218,38 +218,6 @@ function formula_pow_plan(n_vars::Int, d::Int, pow::Int, backend;
 end
 
 # =============================================================================
-# Short-row kernel  (bead rrn.1)
-# =============================================================================
-#
-# 1 thread per output monomial (for rows with < workgroup_size terms).
-# ndrange = length(plan.short_rows)
-#
-# IMPORTANT: @index(Global) gives position i within short_rows, NOT the output
-# monomial index.  Use row = short_rows[i] for all array accesses.
-@kernel function formula_pow_short_kernel!(
-        output,
-        original,
-        term_ptr,
-        term_coeffs,
-        monomial_ptr,
-        monomial_indices,
-        monomial_degrees,
-        short_rows)
-    i   = @index(Global, Linear)
-    row = short_rows[i]          # actual output monomial index
-
-    result = zero(eltype(output))
-    for j in term_ptr[row] : term_ptr[row+1]-1
-        contrib = term_coeffs[j]
-        for k in monomial_ptr[j] : monomial_ptr[j+1]-1
-            contrib *= original[monomial_indices[k]] ^ monomial_degrees[k]
-        end
-        result += contrib
-    end
-    output[row] = result
-end
-
-# =============================================================================
 # Long-row kernel  (bead rrn.3.2)
 # =============================================================================
 #
@@ -335,13 +303,21 @@ function formula_pow(original, plan::FormulaPowPlan, backend)
     WS_M = plan.medium_workgroup_size
     WS_L = plan.workgroup_size
 
+    # Single-op (B=1) routes short and medium tiers through the same
+    # warp-per-row kernel at WS=M. The dedicated 1-thread/row short kernel
+    # is latency-bound on small workloads (165–566 threads is well under
+    # the in-flight capacity of a modern GPU); putting 32 threads on each
+    # short row instead unlocks enough warps to hide memory stalls and
+    # measured 1.8–3× faster on RTX 3070 across (4,4,2)/(4,8,3)/(4,4,6).
+    # The 1-thread/row strategy is reserved for the batched path (K1),
+    # where row count is large enough to be compute- rather than latency-bound.
     if !isempty(plan.short_rows)
-        kernel = formula_pow_short_kernel!(backend, WS_M)
+        kernel = formula_pow_long_kernel!(backend, WS_M)
         kernel(output, original,
                plan.term_ptr, plan.term_coeffs,
                plan.monomial_ptr, plan.monomial_indices, plan.monomial_degrees,
-               plan.short_rows;
-               ndrange = length(plan.short_rows))
+               plan.short_rows, Val(WS_M);
+               ndrange = WS_M * length(plan.short_rows))
     end
 
     if !isempty(plan.medium_rows)
