@@ -298,7 +298,10 @@ end
 # with_replacement_combinations(1:n_vars, d*pow) order.
 function formula_pow(original, plan::FormulaPowPlan, backend)
     num_out = length(plan.term_ptr) - 1
-    output  = KernelAbstractions.zeros(backend, eltype(original), num_out)
+    # Uninitialized: the partition (short ∪ medium ∪ long) covers every output
+    # row and each kernel writes its row once, so zero-init is redundant.
+    # Invariant verified in test/FormulaPowTests.jl "plan partition invariant".
+    output  = KernelAbstractions.allocate(backend, eltype(original), num_out)
 
     WS_M = plan.medium_workgroup_size
     WS_L = plan.workgroup_size

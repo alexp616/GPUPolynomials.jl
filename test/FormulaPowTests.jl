@@ -189,6 +189,25 @@ else
     @info "Skipping Metal formula_pow tests (no Metal device)"
 end
 
+@testset "formula_pow — plan partition invariant (kwd)" begin
+    # short_rows ∪ medium_rows ∪ long_rows must be a disjoint partition of
+    # 1:num_rows. The dispatcher writes each output index from exactly one
+    # tier kernel, so a complete partition lets us skip zero-init.
+    backend = KernelAbstractions.CPU()
+    for (n_vars, d, pow) in [(3,2,2), (4,4,2), (5,5,2), (4,4,6), (4,8,3)]
+        plan = formula_pow_plan(n_vars, d, pow, backend)
+        num_rows = length(plan.term_ptr) - 1
+        s = Array(plan.short_rows)
+        m = Array(plan.medium_rows)
+        l = Array(plan.long_rows)
+        combined = sort(vcat(s, m, l))
+        @test combined == collect(Int32, 1:num_rows)
+        @test isempty(intersect(s, m))
+        @test isempty(intersect(m, l))
+        @test isempty(intersect(s, l))
+    end
+end
+
 @testset "formula_pow — hybrid dispatch CPU (z1g)" begin
     @testset "small pow (pow=2, n_vars=4, d=4)" begin
         n_vars = 4; d = 4; pow = 2
