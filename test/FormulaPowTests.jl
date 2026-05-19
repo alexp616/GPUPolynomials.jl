@@ -228,6 +228,69 @@ end
     end
 end
 
+@testset "formula_pow — batched correctness scaffolding (6jj.1)" begin
+    # Test scaffolding for the future batched API (epic GPUPolynomials.jl-6jj).
+    # Real assertions here are properties that hold against the current
+    # single-op code and must continue to hold once the batched dispatcher
+    # (6jj.5) and sort (6jj.2) land. Batched-API cases are stubbed with
+    # @test_skip and activate once 6jj.3 / 6jj.5 surface the new entry points.
+
+    backend = KernelAbstractions.CPU()
+
+    @testset "pow=1 degenerate" begin
+        # (Σ aᵢ mᵢ)^1 must round-trip the input coefficients unchanged in
+        # the d_out = d basis. Future batched dispatch must preserve this.
+        for (n_vars, d) in [(3, 2), (4, 4)]
+            n = binomial(n_vars + d - 1, d)
+            coeffs = collect(Int, 1:n)
+            _, oscar_result = build_oscar_poly_and_power(n_vars, d, 1, coeffs)
+            plan = formula_pow_plan(n_vars, d, 1, backend)
+            output = formula_pow(coeffs, plan, backend)
+            @test output_to_oscar_poly(output, n_vars, d) == oscar_result
+        end
+    end
+
+    @testset "tier-row ordering invariance" begin
+        # GPUPolynomials.jl-6jj.2 reorders short_rows / medium_rows by row
+        # length. Output indexing is by output_row (via term_ptr[row]), not
+        # by position within the tier array, so output must be identical
+        # regardless of how the tier arrays are permuted.
+        for (n_vars, d, pow) in [(3,2,2), (4,4,2)]
+            n = binomial(n_vars + d - 1, d)
+            coeffs = collect(Int, 1:n)
+            plan = formula_pow_plan(n_vars, d, pow, backend)
+            ref  = formula_pow(coeffs, plan, backend)
+            scrambled_plan = FormulaPowPlan(
+                plan.term_ptr, plan.term_coeffs,
+                plan.monomial_ptr, plan.monomial_indices, plan.monomial_degrees,
+                reverse(plan.short_rows),
+                reverse(plan.medium_rows),
+                reverse(plan.long_rows),
+                plan.workgroup_size, plan.medium_workgroup_size,
+            )
+            scrambled = formula_pow(coeffs, scrambled_plan, backend)
+            @test scrambled == ref
+        end
+    end
+
+    # The cases below await the batched API surfaced by GPUPolynomials.jl-6jj.3
+    # (plan with batch_size) and GPUPolynomials.jl-6jj.5 (dispatcher). Replace
+    # @test_skip with real implementations once those land; the assertions
+    # must hold via a degenerate batch_size=1 path through the new API.
+    @testset "future batched API — awaiting 6jj.3 / 6jj.5" begin
+        # B=1 batched path matches single-op output for (4,4,2), (4,4,6),
+        # (4,8,3), (5,5,2).
+        @test_skip false  # B=1 batched ↔ single-op parity, all four configs
+        # B=2 with distinct originals; per-element output matches single-op.
+        @test_skip false  # B=2 batched, distinct originals
+        # B=1024 path (triggers K1 dispatch on padded layout); per-element
+        # matches single-op on (4,4,2) and (4,8,3).
+        @test_skip false  # B=1024 batched, K1 dispatch
+        # Mixed-batch: same plan, all-different inputs across the batch.
+        @test_skip false  # mixed-batch correctness
+    end
+end
+
 @testset "formula_pow — hybrid dispatch CPU (z1g)" begin
     @testset "small pow (pow=2, n_vars=4, d=4)" begin
         n_vars = 4; d = 4; pow = 2
