@@ -287,22 +287,18 @@ end
 end
 
 # =============================================================================
-# formula_pow  (bead rrn.4)
+# formula_pow / formula_pow!  (bead rrn.4 + 63i)
 # =============================================================================
 #
 # Compute the coefficients of (Σᵢ original[i]*mᵢ)^pow, where mᵢ are the
 # degree-d input monomials in with_replacement_combinations order.
 #
-# Returns a backend array of length binomial(n_vars + d*pow - 1, d*pow) with
-# output[i] = coefficient of the i-th monomial in
-# with_replacement_combinations(1:n_vars, d*pow) order.
-function formula_pow(original, plan::FormulaPowPlan, backend)
-    num_out = length(plan.term_ptr) - 1
-    # Uninitialized: the partition (short ∪ medium ∪ long) covers every output
-    # row and each kernel writes its row once, so zero-init is redundant.
-    # Invariant verified in test/FormulaPowTests.jl "plan partition invariant".
-    output  = KernelAbstractions.allocate(backend, eltype(original), num_out)
-
+# formula_pow!(output, ...) writes into a caller-provided buffer for hot
+# paths that want to reuse allocations. formula_pow(...) allocates and
+# delegates to formula_pow!. Returns a backend array of length
+# binomial(n_vars + d*pow - 1, d*pow) with output[i] = coefficient of the
+# i-th monomial in with_replacement_combinations(1:n_vars, d*pow) order.
+function formula_pow!(output, original, plan::FormulaPowPlan, backend)
     WS_M = plan.medium_workgroup_size
     WS_L = plan.workgroup_size
 
@@ -343,4 +339,13 @@ function formula_pow(original, plan::FormulaPowPlan, backend)
 
     KernelAbstractions.synchronize(backend)
     return output
+end
+
+function formula_pow(original, plan::FormulaPowPlan, backend)
+    num_out = length(plan.term_ptr) - 1
+    # Uninitialized: the partition (short ∪ medium ∪ long) covers every output
+    # row and each kernel writes its row once, so zero-init is redundant.
+    # Invariant verified in test/FormulaPowTests.jl "plan partition invariant".
+    output  = KernelAbstractions.allocate(backend, eltype(original), num_out)
+    return formula_pow!(output, original, plan, backend)
 end

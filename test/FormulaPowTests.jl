@@ -208,6 +208,26 @@ end
     end
 end
 
+@testset "formula_pow! — caller-provided output buffer (63i)" begin
+    # Seed buf with sentinel garbage; formula_pow! must overwrite every index.
+    # If any row escapes a tier kernel, the sentinel would leak into the result
+    # and the Oscar comparison would fail.
+    backend = KernelAbstractions.CPU()
+    sentinel = Int(-12345)
+    for (n_vars, d, pow) in [(3,2,2), (4,4,2), (4,4,6)]
+        n = binomial(n_vars + d - 1, d)
+        coeffs = collect(Int, 1:n)
+        _, oscar_result = build_oscar_poly_and_power(n_vars, d, pow, coeffs)
+        plan = formula_pow_plan(n_vars, d, pow, backend)
+        num_out = length(plan.term_ptr) - 1
+        buf = fill(sentinel, num_out)
+        ret = formula_pow!(buf, copy(coeffs), plan, backend)
+        @test ret === buf
+        @test output_to_oscar_poly(buf, n_vars, d * pow) == oscar_result
+        @test !any(==(sentinel), buf)
+    end
+end
+
 @testset "formula_pow — hybrid dispatch CPU (z1g)" begin
     @testset "small pow (pow=2, n_vars=4, d=4)" begin
         n_vars = 4; d = 4; pow = 2

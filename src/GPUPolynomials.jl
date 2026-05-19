@@ -44,6 +44,7 @@ include("algorithms/gpu/formula_pow.jl")
 
 export formula_pow_plan
 export formula_pow
+export formula_pow!
 export FormulaPowPlan
 
 end
