@@ -228,6 +228,21 @@ end
     end
 end
 
+@testset "formula_pow — tier rows sorted by length (6jj.2)" begin
+    # K1 (1 thread/row, batched-only) places adjacent rows of the row-list in
+    # adjacent threads of a warp. Sorting short_rows and medium_rows by row
+    # length at plan time keeps each warp's lengths nearly uniform, avoiding
+    # 40-60% divergence loss. K2 (warp-per-row) is indifferent to sort.
+    backend = KernelAbstractions.CPU()
+    for (n_vars, d, pow) in [(3,2,2), (4,4,2), (4,4,6), (4,8,3)]
+        plan = formula_pow_plan(n_vars, d, pow, backend)
+        tp = Array(plan.term_ptr)
+        row_len(r) = tp[r+1] - tp[r]
+        @test issorted(row_len.(Array(plan.short_rows)))
+        @test issorted(row_len.(Array(plan.medium_rows)))
+    end
+end
+
 @testset "formula_pow — batched correctness scaffolding (6jj.1)" begin
     # Test scaffolding for the future batched API (epic GPUPolynomials.jl-6jj).
     # Real assertions here are properties that hold against the current

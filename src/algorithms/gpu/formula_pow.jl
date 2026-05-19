@@ -193,6 +193,16 @@ function formula_pow_plan(n_vars::Int, d::Int, pow::Int, backend;
         medium_rows = Int32[i for i in 1:num_rows if medium_workgroup_size <= row_lengths[i] < workgroup_size]
         long_rows   = Int32[i for i in 1:num_rows if row_lengths[i] >= workgroup_size]
 
+        # Sort tier arrays by ascending row length. The future K1 kernel
+        # (1 thread/row, batched-only) places adjacent rows of the tier
+        # array in adjacent threads of a warp; uniform lengths within a
+        # warp avoid 40-60% divergence loss. K2/K3 (warp- or block-per-row)
+        # are indifferent to this order. Output is keyed on output_row via
+        # term_ptr, so sort never changes results.
+        short_rows  = short_rows[sortperm(row_lengths[short_rows])]
+        medium_rows = medium_rows[sortperm(row_lengths[medium_rows])]
+        long_rows   = long_rows[sortperm(row_lengths[long_rows])]
+
         (term_ptr        = tp,
          term_coeffs     = tc,
          monomial_ptr    = mp,
