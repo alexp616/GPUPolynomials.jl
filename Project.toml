@@ -1,6 +1,6 @@
 name = "GPUPolynomials"
 uuid = "cd56b521-fb58-49b4-80c2-43283f39a4e1"
-version = "0.1.0"
+version = "0.1.1"
 
 [deps]
 BitIntegers = "c3b6d118-76ef-56ca-8cc7-ebb389d030a1"
